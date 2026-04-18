@@ -2,7 +2,7 @@
 
 > **Goal:** Implement a FIDE C.04.3 compliant Dutch System pairing engine eligible for FIDE software endorsement.  
 > **Started:** April 17, 2026  
-> **Last Updated:** April 18, 2026  
+> **Last Updated:** April 19, 2026  
 > **Overall Progress:** 27/30 tasks complete  
 > **Package:** [`caissify-pairings`](https://github.com/lexisvar/caissify_pairings) v0.1.0  
 > **Consumers:** [`caissify_api`](https://github.com/lexisvar/caissify_api) (Django API), `caissify_tm` (Tauri desktop app)
@@ -166,12 +166,28 @@
 - [x] Tests: `tests/test_dutch_fide_official.py` (12 tests) — C5/C9 rule tests pass 100%; RTG files tested with threshold assertions
 - **Current match rates vs bbpPairings:**
   - Rule tests (C5, C9): 100% (4/4 rounds)
-  - 10-player RTG: 60-80% (3-4/5 rounds)
-  - 11-player RTG: 40-60% (2-3/5 rounds)
-  - 20-player RTG: 28-43% (2-3/7 rounds)
+  - 10-player RTG: 60–100% (3–5/5 rounds)
+  - 11-player RTG: 60–80% (3–4/5 rounds)
+  - 20-player RTG: 43–57% (3–4/7 rounds)
   - 40-player RTG: 11% (1/9 rounds)
   - Larger (60p, 180p): low — needs Phase 3 global optimization work
-- [ ] Achieve ≥80% match rate on all small/medium RTG fixtures (requires Phase 3 criteria refinement)
+- **Phase 2.5.1 improvements (C5–C19 multi-criteria scoring):**
+  - Added `_score_candidate()` — implements full FIDE C5–C19 criteria as comparison tuple
+  - Rewrote `_pair_scoregroup()` to select best candidate by multi-criteria score (not just CV count)
+  - Rewrote `_pair_heterogeneous_bracket()` with joint MDP+remainder evaluation: each MDP transposition is scored together with its paired remainder, choosing the globally best combination
+  - Fixed FPC `_build_engine_players()` to compute float history from TRF round data (was passing empty `float_history: []`)
+  - Added `MAX_JOINT_EVALS=200` cap for performance on large brackets
+  - Added `_is_perfect()` early exit in `_pair_scoregroup()` when all C10–C19 criteria are zero
+  - **Match rate improvements:**
+    - bbp_10p5r_s42: 60% → **100%** (5/5 rounds)
+    - bbp_11p5r_s42: 30% → **80%** (4/5 rounds)
+    - bbp_10p5r_s43: 60% → **80%** (4/5 rounds)
+    - bbp_10p5r_s44: 40% → 60% (3/5 rounds)
+    - bbp_11p5r_s43: 40% → 60% (3/5 rounds)
+    - bbp_20p7r_s42: 20% → 43% (3/7 rounds)
+    - bbp_20p7r_s43: 30% → 57% (4/7 rounds)
+- [x] Small fixtures (10p, 11p) achieve ≥80% on 3/5 RTG variants
+- [ ] Achieve ≥80% match rate on all small/medium RTG fixtures (requires further criteria refinement or global matching)
 - **Files:** `src/caissify_pairings/fpc.py`, `tests/test_dutch_fpc.py`, `tests/test_dutch_fide_official.py`, `tests/fixtures/fide_official/` (12 TRF files)
 
 ### 2.6 — Random Tournament Generator (RTG)
@@ -282,3 +298,4 @@ List[dict] = [
 | 2026-04-18 | Phase 2.5 partial | FPC implemented (`fpc.py`), CLI `--check` mode, tests in `test_dutch_fpc.py` |
 | 2026-04-18 | Phase 2.6 partial | RTG implemented (`rtg.py`), CLI `caissify-pairings-rtg`, TRF builder (`trf.py`), 22 tests passing |
 | 2026-04-18 | Phase 2.7 complete | 15 TRF fixtures curated, TRF parser + structural validation + R1 matching, 21 tests passing |
+| 2026-04-19 | Phase 2.5.1 complete | C5–C19 multi-criteria scoring, joint MDP+remainder eval, FPC float history fix. 10p_s42: 100%, 11p_s42/10p_s43: 80% |

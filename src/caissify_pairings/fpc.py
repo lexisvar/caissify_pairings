@@ -202,6 +202,32 @@ def _build_engine_players(
     """
     engine_players: List[Dict] = []
 
+    # Pre-compute cumulative scores at the END of each round (score_at[sn][rnd])
+    # so we can derive float directions. score_at[sn][0] = 0 (before round 1).
+    score_at: Dict[int, Dict[int, float]] = {}
+    for sn, p in player_map.items():
+        score_at[sn] = {0: 0.0}
+        cum = 0.0
+        max_rnd = max(p.get("results", {}).keys()) if p.get("results") else 0
+        for rnd in range(1, max_rnd + 1):
+            r = p.get("results", {}).get(rnd)
+            if r is None:
+                score_at[sn][rnd] = cum
+                continue
+            opp = r.get("opponent")
+            res = r.get("result", "-")
+            if opp is None:
+                if res in ("1", "+", "F", "U"):
+                    cum += 1.0
+                elif res in ("=", "H"):
+                    cum += 0.5
+            else:
+                if res in ("1", "+"):
+                    cum += 1.0
+                elif res in ("=", "D"):
+                    cum += 0.5
+            score_at[sn][rnd] = cum
+
     for sn, p in player_map.items():
         # A player is active for this round if they have a result entry
         # for target_round in the TRF.  For round 1 everyone participates.
@@ -217,6 +243,7 @@ def _build_engine_players(
 
         score = 0.0
         color_hist: List[str] = []
+        float_history: List[str] = []
         bye_count = 0
 
         for rnd in range(1, target_round):
@@ -227,8 +254,9 @@ def _build_engine_players(
             res = r.get("result", "-")
 
             if opp is None:
-                # Bye
+                # Bye — counts as downfloat per A.4.b
                 bye_count += 1
+                float_history.append("down")
                 if res in ("1", "+", "F", "U"):
                     score += 1.0
                 elif res in ("=", "H"):
@@ -245,6 +273,16 @@ def _build_engine_players(
                     score += 1.0
                 # 0, -, L → 0
 
+                # Compute float direction: compare pre-round scores
+                my_pre_score = score_at[sn].get(rnd - 1, 0.0)
+                opp_pre_score = score_at[opp].get(rnd - 1, 0.0)
+                if my_pre_score > opp_pre_score:
+                    float_history.append("down")
+                elif my_pre_score < opp_pre_score:
+                    float_history.append("up")
+                else:
+                    float_history.append("none")
+
         engine_players.append({
             "id": sn,
             "name": p.get("name", ""),
@@ -254,7 +292,7 @@ def _build_engine_players(
             "pairing_number": sn,
             "title": p.get("title", ""),
             "color_hist": color_hist,
-            "float_history": [],
+            "float_history": float_history,
             "bye_count": bye_count,
         })
 

@@ -173,6 +173,11 @@ class DutchEngine(BasePairingEngine):
     # Prevents combinatorial explosion in large groups.
     MAX_TRANSPOSITIONS = 5000
 
+    # Maximum joint MDP+remainder evaluations in heterogeneous brackets.
+    # Each evaluation runs _pair_scoregroup on the remainder, so this
+    # controls the cost of the two-phase joint optimisation.
+    MAX_JOINT_EVALS = 200
+
     def __init__(
         self,
         players: List[dict],
@@ -493,7 +498,7 @@ class DutchEngine(BasePairingEngine):
         return [(s1_new, s2_new) for _, s1_new, s2_new in exchanges]
 
     # ------------------------------------------------------------------
-    # Phase 1.10 — Quality metric (C.04.3 §C13-C14)
+    # Phase 1.10 — Quality metric & multi-criteria scoring (C.04.3 §C5-C19)
     # ------------------------------------------------------------------
 
     @staticmethod
@@ -507,7 +512,7 @@ class DutchEngine(BasePairingEngine):
     @staticmethod
     def _colour_violations(pairings: List[Tuple[DutchPlayer, DutchPlayer]]) -> int:
         """
-        Count the number of unsatisfied colour preferences (C.04.3 C6).
+        Count the number of unsatisfied colour preferences (C.04.3 C10).
 
         For each pair, check if there exists a colour assignment that
         satisfies both players' colour preferences.  If not, count the
@@ -524,6 +529,137 @@ class DutchEngine(BasePairingEngine):
             # Both want the same colour → one will be violated
             violations += 1
         return violations
+
+    def _score_candidate(
+        self,
+        pairs: List[Tuple[DutchPlayer, DutchPlayer]],
+        downfloaters: List[DutchPlayer],
+        bracket_score: float,
+    ) -> tuple:
+        """
+        Score a bracket candidate per criteria C5-C19 (lower = better).
+
+        Returns a tuple for lexicographic comparison where lower is better.
+        Criteria order: C5, C6, C10, C11, C12, C13, C14, C15,
+                        C16, C17, C18, C19.
+        (C7 next-bracket lookahead, C8/C9 topscorer colour are omitted
+         here — C8/C9 only matter in the final round with topscorers.)
+        """
+        # C5: maximize pairs → minimize negative
+        c5 = -len(pairs)
+
+        # C6: minimize PSD (lexicographic, descending SDs)
+        sds: List[float] = []
+        for p1, p2 in pairs:
+            sds.append(abs(p1.score - p2.score))
+        # Downfloater SDs per A.8
+        artificial = bracket_score - 1.0
+        for df in downfloaters:
+            sds.append(df.score - artificial)
+        sds.sort(reverse=True)
+        c6 = tuple(sds)
+
+        # C10: minimize players not getting colour preference
+        c10 = 0
+        for p1, p2 in pairs:
+            pref1 = p1.color_preference
+            pref2 = p2.color_preference
+            if pref1 != ColorPref.NONE and pref2 != ColorPref.NONE:
+                if pref1 == pref2:
+                    c10 += 1
+
+        # C11: minimize players with strong pref (strength ≥ 2) not satisfied
+        c11 = 0
+        for p1, p2 in pairs:
+            pref1 = p1.color_preference
+            pref2 = p2.color_preference
+            if pref1 != ColorPref.NONE and pref2 != ColorPref.NONE:
+                if pref1 == pref2:
+                    # The violated player has the weaker preference
+                    violated_strength = min(
+                        p1.preference_strength, p2.preference_strength
+                    )
+                    if violated_strength >= 2:
+                        c11 += 1
+
+        # Helper: float N rounds back
+        def _float_back(p: DutchPlayer, n: int) -> FloatDir:
+            idx = len(p.float_hist) - n
+            return p.float_hist[idx] if idx >= 0 else FloatDir.NONE
+
+        # C12: minimize repeat downfloats from previous round
+        c12 = 0
+        for df in downfloaters:
+            if _float_back(df, 1) == FloatDir.DOWN:
+                c12 += 1
+        for p1, p2 in pairs:
+            if p1.score > bracket_score and _float_back(p1, 1) == FloatDir.DOWN:
+                c12 += 1
+            if p2.score > bracket_score and _float_back(p2, 1) == FloatDir.DOWN:
+                c12 += 1
+
+        # C13: minimize repeat upfloats from previous round
+        c13 = 0
+        for p1, p2 in pairs:
+            if p1.score < p2.score and _float_back(p1, 1) == FloatDir.UP:
+                c13 += 1
+            elif p2.score < p1.score and _float_back(p2, 1) == FloatDir.UP:
+                c13 += 1
+
+        # C14: minimize repeat downfloats from 2 rounds ago
+        c14 = 0
+        for df in downfloaters:
+            if _float_back(df, 2) == FloatDir.DOWN:
+                c14 += 1
+        for p1, p2 in pairs:
+            if p1.score > bracket_score and _float_back(p1, 2) == FloatDir.DOWN:
+                c14 += 1
+            if p2.score > bracket_score and _float_back(p2, 2) == FloatDir.DOWN:
+                c14 += 1
+
+        # C15: minimize repeat upfloats from 2 rounds ago
+        c15 = 0
+        for p1, p2 in pairs:
+            if p1.score < p2.score and _float_back(p1, 2) == FloatDir.UP:
+                c15 += 1
+            elif p2.score < p1.score and _float_back(p2, 2) == FloatDir.UP:
+                c15 += 1
+
+        # C16: minimize score-sum of repeat downfloaters (prev round)
+        c16 = 0.0
+        for df in downfloaters:
+            if _float_back(df, 1) == FloatDir.DOWN:
+                c16 += df.score
+        for p1, p2 in pairs:
+            if p1.score > bracket_score and _float_back(p1, 1) == FloatDir.DOWN:
+                c16 += p1.score
+
+        # C17: minimize opponent-score of repeat upfloaters (prev round)
+        c17 = 0.0
+        for p1, p2 in pairs:
+            if p1.score < p2.score and _float_back(p1, 1) == FloatDir.UP:
+                c17 += p2.score
+            elif p2.score < p1.score and _float_back(p2, 1) == FloatDir.UP:
+                c17 += p1.score
+
+        # C18: minimize score-sum of repeat downfloaters (2 rounds ago)
+        c18 = 0.0
+        for df in downfloaters:
+            if _float_back(df, 2) == FloatDir.DOWN:
+                c18 += df.score
+        for p1, p2 in pairs:
+            if p1.score > bracket_score and _float_back(p1, 2) == FloatDir.DOWN:
+                c18 += p1.score
+
+        # C19: minimize opponent-score of repeat upfloaters (2 rounds ago)
+        c19 = 0.0
+        for p1, p2 in pairs:
+            if p1.score < p2.score and _float_back(p1, 2) == FloatDir.UP:
+                c19 += p2.score
+            elif p2.score < p1.score and _float_back(p2, 2) == FloatDir.UP:
+                c19 += p1.score
+
+        return (c5, c6, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19)
 
     # ------------------------------------------------------------------
     # Core pairing logic for one scoregroup
@@ -554,9 +690,10 @@ class DutchEngine(BasePairingEngine):
 
         Steps:
         1. Split into S1 and S2
-        2. Try default S1[i] vs S2[i]
-        3. Try all transpositions of S2 (pick one with best colour quality)
-        4. Try all exchanges between S1 and S2 with transpositions
+        2. Try all transpositions of S2 — score with _score_candidate (C5-C19)
+        3. Try all exchanges between S1 and S2 with transpositions
+        4. Pick the best candidate per B.8 (highest priority criteria first,
+           then earlier in B.6 sequence for ties)
         5. Return (pairs, remainder)
         """
         if len(group) == 0:
@@ -569,52 +706,51 @@ class DutchEngine(BasePairingEngine):
         if len(s1) == 0:
             return [], list(group)
 
-        # --- Step 1+2: Try default pairing and transpositions of S2,
-        #     pick the candidate with lowest colour violations (C6),
-        #     breaking ties by transposition order (lexicographic = default
-        #     first). ---
+        bracket_score = group[0].score  # homogeneous
+
         best_pairs = None
-        best_cv = float("inf")
-        best_quality = float("inf")
+        best_score = None
         best_remainder: List[DutchPlayer] = []
 
+        def _is_perfect(sc: tuple) -> bool:
+            """Check if the candidate score is perfect (no violations)."""
+            # sc = (c5, c6, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19)
+            # Perfect = c10..c19 all zero (C5/C6 are same for same-size bracket)
+            return all(v == 0 or v == 0.0 for v in sc[2:])
+
+        # --- Step 1+2: Try all transpositions of S2,
+        #     pick the candidate with best C5-C19 score. ---
         for s2_perm in self._generate_transpositions(s2, len(s1)):
             result = self._try_pair_s1_s2(s1, s2_perm)
             if result is not None:
-                cv = self._colour_violations(result)
-                q = self._pairing_quality(result)
                 used = set(id(p) for p in s2_perm[:len(s1)])
                 remainder = [p for p in s2 if id(p) not in used]
-                if cv < best_cv or (cv == best_cv and q < best_quality):
-                    best_cv = cv
-                    best_quality = q
+                score = self._score_candidate(result, remainder, bracket_score)
+                if best_score is None or score < best_score:
+                    best_score = score
                     best_pairs = result
                     best_remainder = remainder
-                if cv == 0 and q == 0:
-                    break  # Perfect pairing, no need to continue
+                    if _is_perfect(score):
+                        break  # Perfect pairing found
 
-        if best_pairs is not None:
+        if best_pairs is not None and _is_perfect(best_score):
             return best_pairs, best_remainder
 
-        # --- Step 3: Try exchanges ---
-        best_cv = float("inf")
-        best_quality = float("inf")
-
+        # --- Step 3: Try exchanges — compare against best from transpositions ---
         for new_s1, new_s2 in self._generate_exchanges(s1, s2):
             for s2_perm in self._generate_transpositions(new_s2, len(new_s1)):
                 result = self._try_pair_s1_s2(new_s1, s2_perm)
                 if result is not None:
-                    cv = self._colour_violations(result)
-                    q = self._pairing_quality(result)
                     used = set(id(p) for p in s2_perm[:len(new_s1)])
                     remainder = [p for p in new_s2 if id(p) not in used]
-                    if cv < best_cv or (cv == best_cv and q < best_quality):
-                        best_cv = cv
-                        best_quality = q
+                    score = self._score_candidate(
+                        result, remainder, bracket_score
+                    )
+                    if best_score is None or score < best_score:
+                        best_score = score
                         best_pairs = result
                         best_remainder = remainder
-                    break  # Take first valid transposition for this exchange
-
+                    break  # First valid transposition for this exchange
         if best_pairs is not None:
             return best_pairs, best_remainder
 
@@ -637,19 +773,16 @@ class DutchEngine(BasePairingEngine):
         residents: List[DutchPlayer],
     ) -> Tuple[List[Tuple[DutchPlayer, DutchPlayer]], List[DutchPlayer]]:
         """
-        Pair a heterogeneous bracket (C.04.3 §B.2-B.3, B.7).
+        Pair a heterogeneous bracket (C.04.3 §B.2-B.3, B.7, B.8).
 
         A heterogeneous bracket contains MDPs (moved-down players from the
-        previous bracket) and resident players.  The pairing proceeds in
-        two phases:
+        previous bracket) and resident players.
 
-        1. MDP-Pairing: S1 = MDPs (highest first), S2 = residents.
-           Pair each MDP against a resident using transpositions/exchanges.
-        2. Remainder: the unpaired residents form a new homogeneous bracket
-           and are paired using ``_pair_scoregroup``.
+        Joint evaluation: for each MDP transposition, pair the remainder
+        as a homogeneous bracket and score the combined candidate using
+        ``_score_candidate`` (C5-C19).  This ensures MDP pairing choices
+        consider remainder quality (floats, colour, PSD).
         """
-        all_pairs: List[Tuple[DutchPlayer, DutchPlayer]] = []
-
         # Sort MDPs by pairing order (highest rank first = lowest PN)
         mdps_sorted = sorted(mdps, key=lambda p: p.pairing_number)
         residents_sorted = sorted(residents, key=lambda p: p.pairing_number)
@@ -661,79 +794,98 @@ class DutchEngine(BasePairingEngine):
             all_remainder.sort(key=lambda p: (-p.score, p.pairing_number))
             return self._pair_scoregroup(all_remainder)
 
+        bracket_score = residents_sorted[0].score if residents_sorted else 0.0
         s1 = mdps_sorted[:m1]
         limbo = mdps_sorted[m1:]  # MDPs that can't be paired (double-float)
         s2 = residents_sorted
 
-        # --- Phase 1: MDP-Pairing ---
-        mdp_pairs, mdp_remainder = self._pair_mdp_phase(s1, s2)
-        all_pairs.extend(mdp_pairs)
+        best_all_pairs = None
+        best_score = None
+        best_final_remainder: List[DutchPlayer] = []
+        joint_evals = 0
 
-        # Unpaired residents after MDP pairing
-        paired_resident_ids = set()
-        for _, r in mdp_pairs:
-            paired_resident_ids.add(r.id)
-        unpaired_residents = [p for p in residents_sorted
-                              if p.id not in paired_resident_ids]
-
-        # --- Phase 2: Remainder (homogeneous pairing of leftover residents) ---
-        if unpaired_residents:
-            rem_pairs, rem_remainder = self._pair_scoregroup(unpaired_residents)
-            all_pairs.extend(rem_pairs)
-        else:
-            rem_remainder = []
-
-        # Final remainder = limbo MDPs + unpaired MDPs + unpaired residents
-        final_remainder = limbo + mdp_remainder + rem_remainder
-        final_remainder.sort(key=lambda p: (-p.score, p.pairing_number))
-
-        return all_pairs, final_remainder
-
-    def _pair_mdp_phase(
-        self,
-        s1: List[DutchPlayer],
-        s2: List[DutchPlayer],
-    ) -> Tuple[List[Tuple[DutchPlayer, DutchPlayer]], List[DutchPlayer]]:
-        """
-        Try to pair MDPs (S1) against residents (S2).
-
-        Uses the same transposition/exchange logic as homogeneous pairing
-        but S1 = MDPs, S2 = all residents.
-        Returns (pairs, unpaired_mdps).
-        """
-        if not s1 or not s2:
-            return [], list(s1)
-
-        # --- Try all transpositions of S2, pick best colour quality ---
-        best_pairs = None
-        best_cv = float("inf")
-        best_quality = float("inf")
-
+        # --- Try each MDP transposition → pair remainder → score jointly ---
         for s2_perm in self._generate_transpositions(s2, len(s1)):
-            result = self._try_pair_s1_s2(s1, s2_perm)
-            if result is not None:
-                cv = self._colour_violations(result)
-                q = self._pairing_quality(result)
-                if cv < best_cv or (cv == best_cv and q < best_quality):
-                    best_cv = cv
-                    best_quality = q
-                    best_pairs = result
-                if cv == 0 and q == 0:
+            mdp_result = self._try_pair_s1_s2(s1, s2_perm)
+            if mdp_result is None:
+                continue
+
+            joint_evals += 1
+
+            paired_resident_ids = set()
+            for _, r in mdp_result:
+                paired_resident_ids.add(r.id)
+            unpaired_residents = [
+                p for p in residents_sorted if p.id not in paired_resident_ids
+            ]
+
+            if unpaired_residents:
+                rem_pairs, rem_downfloaters = self._pair_scoregroup(
+                    unpaired_residents
+                )
+            else:
+                rem_pairs, rem_downfloaters = [], []
+
+            all_pairs = mdp_result + rem_pairs
+            all_downfloaters = list(limbo) + rem_downfloaters
+
+            score = self._score_candidate(
+                all_pairs, all_downfloaters, bracket_score
+            )
+            if best_score is None or score < best_score:
+                best_score = score
+                best_all_pairs = all_pairs
+                best_final_remainder = all_downfloaters
+                # Early exit if perfect (no C10-C19 violations)
+                if all(v == 0 or v == 0.0 for v in score[2:]):
                     break
 
-        if best_pairs is not None:
-            return best_pairs, []
+            if joint_evals >= self.MAX_JOINT_EVALS:
+                break
 
-        # --- Try reducing M1 (pair fewer MDPs) ---
+        if best_all_pairs is not None:
+            best_final_remainder.sort(
+                key=lambda p: (-p.score, p.pairing_number)
+            )
+            return best_all_pairs, best_final_remainder
+
+        # --- Fallback: Try reducing M1 (pair fewer MDPs) ---
         for reduce in range(1, len(s1)):
-            fewer_s1 = s1[:len(s1) - reduce]
+            fewer_s1 = s1[: len(s1) - reduce]
+            unpaired_mdps = s1[len(s1) - reduce :]
             for s2_perm in self._generate_transpositions(s2, len(fewer_s1)):
-                result = self._try_pair_s1_s2(fewer_s1, s2_perm)
-                if result is not None:
-                    unpaired = s1[len(s1) - reduce:]
-                    return result, unpaired
+                mdp_result = self._try_pair_s1_s2(fewer_s1, s2_perm)
+                if mdp_result is not None:
+                    paired_resident_ids = set()
+                    for _, r in mdp_result:
+                        paired_resident_ids.add(r.id)
+                    unpaired_residents = [
+                        p
+                        for p in residents_sorted
+                        if p.id not in paired_resident_ids
+                    ]
+                    if unpaired_residents:
+                        rem_pairs, rem_downfloaters = self._pair_scoregroup(
+                            unpaired_residents
+                        )
+                    else:
+                        rem_pairs, rem_downfloaters = [], []
 
-        return [], list(s1)
+                    all_pairs = mdp_result + rem_pairs
+                    final_remainder = (
+                        list(limbo)
+                        + list(unpaired_mdps)
+                        + rem_downfloaters
+                    )
+                    final_remainder.sort(
+                        key=lambda p: (-p.score, p.pairing_number)
+                    )
+                    return all_pairs, final_remainder
+
+        # --- Fallback: treat everything as homogeneous ---
+        all_players = mdps_sorted + residents_sorted
+        all_players.sort(key=lambda p: (-p.score, p.pairing_number))
+        return self._pair_scoregroup(all_players)
 
     def _backtrack_match(
         self, players: List[DutchPlayer], relaxed: bool = False,

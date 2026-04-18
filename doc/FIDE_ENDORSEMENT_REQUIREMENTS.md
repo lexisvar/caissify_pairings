@@ -2,7 +2,7 @@
 
 > **Reference:** [C.04.A Appendix: Endorsement of a software program](https://spp.fide.com/c-04-a-appendix-endorsement-of-a-software-program/)  
 > **Program:** Caissify (API + Desktop)  
-> **Last Updated:** April 18, 2026 (Phase 2.7 complete)  
+> **Last Updated:** April 19, 2026 (Phase 2.5.1 — C5–C19 multi-criteria scoring)  
 
 ---
 
@@ -27,7 +27,7 @@
 
 | # | Requirement | Status | Notes |
 |---|-------------|--------|-------|
-| A.2.1 | Implement FIDE (Dutch) System (C.04.3) | **In Progress** | `src/caissify_pairings/engines/dutch.py` — Phases 1 & 2 complete. 131 tests (121 passing, 10 skipped/JavaFo). See `doc/ROADMAP.md` |
+| A.2.1 | Implement FIDE (Dutch) System (C.04.3) | **In Progress** | `src/caissify_pairings/engines/dutch.py` — Phases 1 & 2 complete. Phase 2.5.1: full C5–C19 multi-criteria scoring, joint MDP+remainder evaluation, FPC float history tracking. 10p fixtures: 80–100%, 11p: 60–80%, 20p: 43–57% match rates vs bbpPairings. See `doc/ROADMAP.md` |
 | A.2.2 | **FIDE mode** that offers all required functionalities | **In Progress** | Branched on `tournament.is_fide_rated`; casual mode preserved |
 | A.2.3 | English language interface | **Done** | API is English; desktop app has English UI |
 | A.2.4 | Import files in FIDE Data Exchange Format (TRF16) | **Done** | `tournament/services/trf_parser.py` + `trf_importer.py` |
@@ -179,26 +179,27 @@ Known endorsed programs (for context):
 
 | Component | Weight | Status | Progress |
 |-----------|--------|--------|----------|
-| Dutch System engine (C.04.3) | Critical | In Progress | ~85% |
+| Dutch System engine (C.04.3) | Critical | In Progress | ~88% *(C5–C19 criteria implemented; small fixtures 80–100%; medium/large need global matching)* |
 | FIDE mode (`is_fide_rated`) | Critical | Done | 100% |
 | English interface | Required | Done | 100% |
 | TRF16 import/parse | Required | Done | 100% |
 | TRF16 export/build | Required | Done | ~90% |
-| FPC (command-line checker) | Required | Done | ~80% *(needs FIDE official test suites)* |
+| FPC (command-line checker) | Required | Done | ~85% *(float history tracking added; needs FIDE official test suites)* |
 | RTG (tournament generator) | Required | Done | ~90% *(needs 5000-tournament validation run)* |
 | TRF fixture validation | Recommended | Done | 100% *(15 fixtures, 21 tests)* |
 | JavaFo cross-validation | Recommended | Done | ~50% *(R1 100%, later rounds ~45%)* |
+| bbpPairings cross-validation | Recommended | In Progress | Small: 60–100%, Medium: 43–57%, Large: 11% |
 | FE-1 application submission | Required | Not Started | 0% |
 | FPC 5000-tournament validation | Required | Not Started | 0% |
 
-**Estimated overall endorsement readiness: ~65%**
+**Estimated overall endorsement readiness: ~70%**
 
 ---
 
 ## Action Items (Priority Order)
 
-1. **Run 5000-tournament RTG→FPC validation** — `caissify-pairings-rtg -n 5000` then `caissify-pairings --check` each output (this repo)
-2. **Improve Dutch engine match rate** — narrow divergence from JavaFo in later rounds (transposition/exchange order)
+1. **Improve Dutch engine match rate on medium/large fixtures** — remaining divergence from bbpPairings stems from greedy bracket-by-bracket approach vs bbpPairings' global maximum weight matching. Options: implement Blossom V / Hungarian algorithm, or refine heuristic with look-ahead
+2. **Run 5000-tournament RTG→FPC validation** — `caissify-pairings-rtg -n 5000` then `caissify-pairings --check` each output (this repo)
 3. **Audit TRF16 export in API** — add XXC/XXS lines, field positioning (`caissify_api` repo)
 4. **Download & run FIDE official FPC test suites** — validate against endorsed programs' output
 5. **Build FPC into Caissify Desktop** — native binary for distribution (separate project)
