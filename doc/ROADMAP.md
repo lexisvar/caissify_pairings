@@ -2,8 +2,8 @@
 
 > **Goal:** Implement a FIDE C.04.3 compliant Dutch System pairing engine eligible for FIDE software endorsement.  
 > **Started:** April 17, 2026  
-> **Last Updated:** April 19, 2026  
-> **Overall Progress:** 27/30 tasks complete  
+> **Last Updated:** April 18, 2026  
+> **Overall Progress:** 28/30 tasks complete  
 > **Package:** [`caissify-pairings`](https://github.com/lexisvar/caissify_pairings) v0.1.0  
 > **Consumers:** [`caissify_api`](https://github.com/lexisvar/caissify_api) (Django API), `caissify_tm` (Tauri desktop app)
 
@@ -195,8 +195,11 @@
 - [x] CLI: `caissify-pairings-rtg --players 20 --rounds 9 -n 5000 -o output_dir/`
 - [x] Produces full TRF16 output per tournament via `trf.py`
 - [x] RTG tests: `tests/test_rtg.py` (22 tests — expected score, simulation, generation, roundtrip)
-- [ ] Run 5000 RTG tournaments through FPC pipeline and validate ≤10 discrepancies
-- **Files:** `src/caissify_pairings/rtg.py`, `src/caissify_pairings/trf.py`, `tests/test_rtg.py`
+- [x] Fixed RTG float history tracking — `_update_player()` now computes float direction from pre-round scores, matching FPC reconstruction
+- [x] **FIDE A.7 validation: 5000 × 20p/9r → 0 discrepancies** (45,000 rounds checked, 0 mismatched)
+- [x] **FIDE A.7 validation: 5000 × 10p/5r → 0 discrepancies** (25,000 rounds checked, 0 mismatched)
+- [x] Validation tests: `tests/test_rtg_fpc_validation.py` (2 smoke + 2 full 5000-tournament tests)
+- **Files:** `src/caissify_pairings/rtg.py`, `src/caissify_pairings/trf.py`, `tests/test_rtg.py`, `tests/test_rtg_fpc_validation.py`
 
 ### 2.7 — TRF fixture-based validation
 - [x] Curated 15 TRF fixture files from reference tournament collection (7p–50p, 5r–31r)

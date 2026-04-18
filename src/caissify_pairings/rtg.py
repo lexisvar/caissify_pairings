@@ -158,6 +158,9 @@ def generate_tournament(
     all_results: Dict[int, Dict[int, Dict]] = {p["id"]: {} for p in players}
 
     for rnd in range(1, num_rounds + 1):
+        # Capture pre-round scores for float direction computation
+        pre_scores: Dict[int, float] = {p["id"]: p["score"] for p in players}
+
         # --- Pair ---
         engine_players = _snapshot_players(players)
         engine = DutchEngine(
@@ -174,13 +177,14 @@ def generate_tournament(
             b_id = pairing.get("black_id")
 
             if b_id is None or pairing.get("bye"):
-                # Bye — full point
+                # Bye — full point; counts as downfloat per A.4.b
                 all_results[w_id][rnd] = {
                     "opponent": None,
                     "color": None,
                     "result": "U",
                 }
                 _update_player(players, w_id, score_delta=1.0, bye=True)
+                _find(players, w_id)["float_history"].append("down")
                 continue
 
             w_player = _find(players, w_id)
@@ -214,6 +218,19 @@ def generate_tournament(
 
             # Track opponents
             previous_pairings.add((min(w_id, b_id), max(w_id, b_id)))
+
+            # Compute float direction from pre-round scores
+            w_pre = pre_scores[w_id]
+            b_pre = pre_scores[b_id]
+            if w_pre > b_pre:
+                w_player["float_history"].append("down")
+                b_player["float_history"].append("up")
+            elif w_pre < b_pre:
+                w_player["float_history"].append("up")
+                b_player["float_history"].append("down")
+            else:
+                w_player["float_history"].append("none")
+                b_player["float_history"].append("none")
 
     # --- Build TRF output ---
     trf_players = []

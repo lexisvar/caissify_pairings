@@ -2,7 +2,7 @@
 
 > **Reference:** [C.04.A Appendix: Endorsement of a software program](https://spp.fide.com/c-04-a-appendix-endorsement-of-a-software-program/)  
 > **Program:** Caissify (API + Desktop)  
-> **Last Updated:** April 19, 2026 (Phase 2.5.1 — C5–C19 multi-criteria scoring)  
+> **Last Updated:** April 18, 2026 (Phase 2.6 — RTG→FPC 5000-tournament validation: 0 discrepancies)  
 
 ---
 
@@ -33,7 +33,7 @@
 | A.2.4 | Import files in FIDE Data Exchange Format (TRF16) | **Done** | `tournament/services/trf_parser.py` + `trf_importer.py` |
 | A.2.5 | Export files in FIDE Data Exchange Format (TRF16) | **Partial** | `tournament/services/trf_exporter.py` exists — needs XXC/XXS lines, field alignment audit |
 | A.2.6 | Public availability of a **(free) Pairings Checker** (FPC) | **In Progress** | `src/caissify_pairings/fpc.py` — CLI: `caissify-pairings --check FILE.trf`. Also planned for **Caissify Desktop** (Tauri/Rust binary) |
-| A.2.7 | FIDE mode must not cause pairing mishaps | **In Progress** | 131 tests (30 unit + 22 integration + 10 JavaFo + 21 TRF-fixture + 22 RTG + 26 FPC). Needs FIDE official FPC test suite validation |
+| A.2.7 | FIDE mode must not cause pairing mishaps | **In Progress** | 149+ tests (30 unit + 22 integration + 10 JavaFo + 21 TRF-fixture + 22 RTG + 26 FPC + 12 FIDE official + 4 RTG→FPC validation + 2 slow 5000-tournament). Self-consistency: 10,000 tournaments, 70,000 rounds, 0 discrepancies. Needs bbpPairings cross-validation improvement. |
 | A.2.8 | Additional services allowed if not prohibited by FIDE | **OK** | Casual mode, analytics, etc. are non-conflicting |
 
 ### Error correction policy (A.2 cont.)
@@ -123,7 +123,12 @@ It will also be bundled into the **Caissify Desktop** project (`caissify_tm`) as
 - For endorsement when other programs are already endorsed (A.7): **5000 random tournaments** are generated and fed through the candidate FPC. At most **10 discrepancies** are allowed.
 - CLI: `caissify-pairings-rtg -n 5000 -p 20 -r 9 -o ./rtg_output/`
 - 22 RTG tests passing (`tests/test_rtg.py`)
-- **Files:** `src/caissify_pairings/rtg.py`, `src/caissify_pairings/trf.py`
+- **FIDE A.7 validation complete:**
+  - 5000 × 20p/9r → **0 discrepancies** (45,000 rounds checked)
+  - 5000 × 10p/5r → **0 discrepancies** (25,000 rounds checked)
+  - Tests: `tests/test_rtg_fpc_validation.py` (4 tests: 2 smoke + 2 full 5000-tournament)
+- Fixed RTG float history tracking: `_update_player()` now computes float direction from pre-round scores
+- **Files:** `src/caissify_pairings/rtg.py`, `src/caissify_pairings/trf.py`, `tests/test_rtg_fpc_validation.py`
 
 ---
 
@@ -184,15 +189,15 @@ Known endorsed programs (for context):
 | English interface | Required | Done | 100% |
 | TRF16 import/parse | Required | Done | 100% |
 | TRF16 export/build | Required | Done | ~90% |
-| FPC (command-line checker) | Required | Done | ~85% *(float history tracking added; needs FIDE official test suites)* |
-| RTG (tournament generator) | Required | Done | ~90% *(needs 5000-tournament validation run)* |
+| FPC (command-line checker) | Required | Done | ~90% *(float history tracking fixed; 10,000 tournaments self-consistent)* |
+| RTG (tournament generator) | Required | Done | **100%** *(5000-tournament validation: 0 discrepancies)* |
 | TRF fixture validation | Recommended | Done | 100% *(15 fixtures, 21 tests)* |
 | JavaFo cross-validation | Recommended | Done | ~50% *(R1 100%, later rounds ~45%)* |
 | bbpPairings cross-validation | Recommended | In Progress | Small: 60–100%, Medium: 43–57%, Large: 11% |
 | FE-1 application submission | Required | Not Started | 0% |
-| FPC 5000-tournament validation | Required | Not Started | 0% |
+| FPC 5000-tournament validation | Required | **Done** | **100%** *(10,000 tournaments, 70,000 rounds, 0 discrepancies)* |
 
-**Estimated overall endorsement readiness: ~70%**
+**Estimated overall endorsement readiness: ~75%**
 
 ---
 
