@@ -697,10 +697,6 @@ class DutchEngine(BasePairingEngine):
 
         return pairs if pairs else None
 
-        if backtrack():
-            return pairs
-        return None
-
     # ------------------------------------------------------------------
     # Phase 1.7 — Float management (C.04.3 §A5-A7)
     # ------------------------------------------------------------------

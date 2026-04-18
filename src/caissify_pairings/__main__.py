@@ -1,12 +1,11 @@
 """
 CLI entry point for caissify-pairings.
 
-Reads a JSON object from stdin, runs the specified pairing engine,
-and writes the resulting pairings as JSON to stdout.
-
-Usage:
-    echo '{"system":"dutch","players":[...],...}' | caissify-pairings
-    caissify-pairings < tournament_state.json
+Modes:
+    caissify-pairings                  — read JSON from stdin, output pairings
+    caissify-pairings --check FILE.trf — FPC: check a TRF file against engine
+    caissify-pairings-check FILE.trf   — FPC shortcut
+    caissify-pairings-rtg [options]    — RTG: generate random tournaments
 """
 
 from __future__ import annotations
@@ -18,6 +17,14 @@ from caissify_pairings import generate_pairings
 
 
 def main() -> None:
+    # If --check flag is present, delegate to FPC
+    if len(sys.argv) >= 2 and sys.argv[1] == "--check":
+        from caissify_pairings.fpc import main as fpc_main
+        # Shift argv so fpc_main sees the file as argv[1]
+        sys.argv = [sys.argv[0]] + sys.argv[2:]
+        fpc_main()
+        return
+
     raw = sys.stdin.read()
     if not raw.strip():
         print(json.dumps({"error": "Empty input. Provide JSON on stdin."}), file=sys.stderr)

@@ -27,6 +27,8 @@ classifiers = [
 
 [project.scripts]
 caissify-pairings = "caissify_pairings.__main__:main"
+caissify-pairings-check = "caissify_pairings.fpc:main"
+caissify-pairings-rtg = "caissify_pairings.rtg:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/caissify_pairings"]

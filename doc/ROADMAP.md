@@ -3,7 +3,7 @@
 > **Goal:** Implement a FIDE C.04.3 compliant Dutch System pairing engine eligible for FIDE software endorsement.  
 > **Started:** April 17, 2026  
 > **Last Updated:** April 18, 2026  
-> **Overall Progress:** 20/30 tasks complete  
+> **Overall Progress:** 25/30 tasks complete  
 > **Package:** [`caissify-pairings`](https://github.com/lexisvar/caissify_pairings) v0.1.0  
 > **Consumers:** [`caissify_api`](https://github.com/lexisvar/caissify_api) (Django API), `caissify_tm` (Tauri desktop app)
 
@@ -119,7 +119,7 @@
 - [x] Color allocation tests
 - [x] Bye assignment tests
 - [x] Absolute/relative criteria tests
-- **Files:** `tests/tournament/test_dutch_engine.py` (30 tests)
+- **Files:** `tests/test_dutch_engine.py` (30 tests)
 
 ### 2.2 — Integration tests (full tournament simulations)
 - [x] 6-player, 5-round tournament (two-triangle degeneration handled)
@@ -134,14 +134,14 @@
   - Added `_greedy_match()` fallback for incomplete matchings
   - Smart bye selection — verifies remaining group is pairable
   - Progressive fallback chain: scoregroup → backtrack → global → greedy
-- **Files:** `tests/tournament/test_dutch_integration.py` (22 tests)
+- **Files:** `tests/test_dutch_integration.py` (22 tests)
 
 ### 2.3 — JavaFo cross-validation
 - [x] Built `javafo/JaVaFoBridge.java` — subprocess bridge calling `JaVaFoApi.exec(1000, trf)` via stdin/stdout
 - [x] Round-by-round comparison for 5 tournament configurations (10p/5r, 8p/7r, 9p/5r, 20p/9r, 12p/7r)
 - [x] Round 1 matches 100% (deterministic Dutch initial pairing); later rounds ~45% match rate documented
 - [x] Mismatches logged per-round with diff sets; arise from transposition/exchange selection order
-- **Files:** `tests/tournament/test_dutch_javafo.py`, `javafo/JaVaFoBridge.java`, `javafo/JaVaFoBridge.class`, `javafo/main.jar`
+- **Files:** `tests/test_dutch_javafo.py`, `javafo/JaVaFoBridge.java`, `javafo/JaVaFoBridge.class`, `javafo/main.jar`
 - **Results:** 15/33 rounds exact match, 10 tests (all pass), 0 JavaFo failures
 
 ### 2.4 — Package extraction (`caissify-pairings`)
@@ -154,18 +154,31 @@
 - **Package files:** `src/caissify_pairings/{__init__,__main__,base}.py`, `src/caissify_pairings/engines/{__init__,dutch}.py`
 - **API files changed:** `Dockerfile`, `requirements.txt`, `tournament/utils/dutch.py` (shim), test imports
 
-### 2.5 — FPC (Free Pairings Checker) validation
-- [ ] Download FIDE's FPC test suites
-- [ ] Run engine TRF output through FPC for each test case
-- [ ] Every test case must produce identical pairings
-- [ ] Document pass/fail results
-- **Files:** `tests/tournament/test_dutch_fpc.py`
+### 2.5 — FPC (Free Pairings Checker)
+- [x] Implemented `fpc.py` — reads TRF16 file, replays each round through the Dutch engine, compares against recorded pairings
+- [x] CLI: `caissify-pairings --check FILE.trf` — outputs per-round match/mismatch report
+- [x] FPC tests: `tests/test_dutch_fpc.py`
+- [ ] Download FIDE's official FPC test suites and validate against them
+- [ ] Every official test case must produce identical pairings
+- **Files:** `src/caissify_pairings/fpc.py`, `tests/test_dutch_fpc.py`
 
 ### 2.6 — Random Tournament Generator (RTG)
-- [ ] Generate randomized tournaments (N players, R rounds, random results)
-- [ ] Run both engine and FPC, compare outputs
-- [ ] Required for FIDE endorsement submission
-- **Files:** `tournament/utils/rtg.py`, `tests/tournament/test_rtg.py`
+- [x] Implemented `rtg.py` — generates simulated tournaments with FIDE rating probability model
+- [x] CLI: `caissify-pairings-rtg --players 20 --rounds 9 -n 5000 -o output_dir/`
+- [x] Produces full TRF16 output per tournament via `trf.py`
+- [x] RTG tests: `tests/test_rtg.py` (22 tests — expected score, simulation, generation, roundtrip)
+- [ ] Run 5000 RTG tournaments through FPC pipeline and validate ≤10 discrepancies
+- **Files:** `src/caissify_pairings/rtg.py`, `src/caissify_pairings/trf.py`, `tests/test_rtg.py`
+
+### 2.7 — TRF fixture-based validation
+- [x] Curated 15 TRF fixture files from reference tournament collection (7p–50p, 5r–31r)
+- [x] TRF parser: reads TRF16 files, extracts players, round-by-round results and pairings
+- [x] Round 1 deterministic matching: our engine matches reference pairings for all 15 fixtures
+- [x] Structural validation: replays up to 9 rounds per fixture, checks no repeats, colour balance (no 3-in-a-row, diff ≤ ±2), sequential tables
+- [x] Bye assignment validation: odd-player fixtures verified to produce exactly 1 bye per round
+- [x] 21 tests across 7 test classes, all passing
+- **Fixtures:** `tests/fixtures/` — 15 TRF files covering small/medium/large/stress/edge-case tournaments
+- **Files:** `tests/test_dutch_trf_fixtures.py`
 
 ---
 
@@ -201,9 +214,13 @@
 | Base class | `src/caissify_pairings/base.py` |
 | Engine registry | `src/caissify_pairings/engines/__init__.py` |
 | CLI entry point | `src/caissify_pairings/__main__.py` |
+| FPC (Pairings Checker) | `src/caissify_pairings/fpc.py` |
+| RTG (Tournament Generator) | `src/caissify_pairings/rtg.py` |
+| TRF16 builder | `src/caissify_pairings/trf.py` |
+| TRF fixtures (15 files) | `tests/fixtures/*.trf` |
 | API integration (re-export shim) | `caissify_api:tournament/utils/dutch.py` |
 | API call site | `caissify_api:tournament/views/tournament.py` ~line 892 |
-| TRF exporter | `caissify_api:tournament/services/trf_exporter.py` |
+| TRF exporter (API) | `caissify_api:tournament/services/trf_exporter.py` |
 | JavaFo bridge | `caissify_api:javafo/JaVaFoBridge.java` |
 | FIDE C.04.1 | https://handbook.fide.com/chapter/C0401202507 |
 | FIDE C.04.3 | https://handbook.fide.com/chapter/C0403202507 |
@@ -250,3 +267,6 @@ List[dict] = [
 | 2026-04-18 | Phase 2.2 complete | 22 integration tests passing, greedy match + smart bye selection added |
 | 2026-04-18 | Phase 2.3 complete | 10 JavaFo cross-validation tests, round 1 100% match, ~45% later rounds |
 | 2026-04-18 | Phase 2.4 complete | Extracted to `caissify-pairings` package, published to GitHub, Docker verified |
+| 2026-04-18 | Phase 2.5 partial | FPC implemented (`fpc.py`), CLI `--check` mode, tests in `test_dutch_fpc.py` |
+| 2026-04-18 | Phase 2.6 partial | RTG implemented (`rtg.py`), CLI `caissify-pairings-rtg`, TRF builder (`trf.py`), 22 tests passing |
+| 2026-04-18 | Phase 2.7 complete | 15 TRF fixtures curated, TRF parser + structural validation + R1 matching, 21 tests passing |

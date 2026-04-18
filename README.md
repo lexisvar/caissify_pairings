@@ -6,7 +6,7 @@ Pluggable chess tournament pairing engines for Swiss-system and other tournament
 
 | Engine | FIDE Ref | Status |
 |--------|----------|--------|
-| **FIDE Dutch** | C.04.3 (Feb 2026) | ✅ Complete — 62 tests passing |
+| **FIDE Dutch** | C.04.3 (Feb 2026) | ✅ Complete — 131 tests (121 passing, 10 skipped/JavaFo) |
 | Swiss (casual) | — | 🔜 Planned |
 | Burstein | C.04.4 | 🔜 Planned |
 
@@ -74,6 +74,16 @@ caissify-pairings < tournament_state.json
 # Output is JSON to stdout
 ```
 
+### FIDE Endorsement Tools
+
+```bash
+# Free Pairings Checker (FPC) — validate a TRF file against the Dutch engine
+caissify-pairings --check tournament.trf
+
+# Random Tournament Generator (RTG) — generate simulated tournaments
+caissify-pairings-rtg --players 20 --rounds 9 -n 100 -o ./output/
+```
+
 ### Input JSON Schema
 
 ```json
@@ -115,6 +125,9 @@ caissify_pairings/
 ├── __init__.py          # Public API: generate_pairings()
 ├── __main__.py          # CLI entry point (JSON stdin → stdout)
 ├── base.py              # Abstract base class for all engines
+├── fpc.py               # Free Pairings Checker (FIDE C.04.A)
+├── rtg.py               # Random Tournament Generator (FIDE C.04.A)
+├── trf.py               # TRF16 parser & builder
 └── engines/
     ├── __init__.py      # Engine registry
     └── dutch.py         # FIDE Dutch System (C.04.3)
