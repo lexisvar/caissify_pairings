@@ -9,6 +9,9 @@ description = "Pluggable chess tournament pairing engines — FIDE Dutch, Swiss,
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
+dependencies = [
+    "networkx>=3.0",
+]
 authors = [
     { name = "Caissify" },
 ]

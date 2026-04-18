@@ -95,14 +95,16 @@ class DutchPlayer:
         if len(self.color_hist) >= 2 and self.color_hist[-1] == self.color_hist[-2]:
             return ColorPref.WHITE if self.color_hist[-1] == "black" else ColorPref.BLACK
 
-        # Strong: colour difference is ±2
+        # Absolute / Strong: equalise when colour difference is non-zero.
+        # bbpPairings: |diff| >= 2 → absolute, |diff| == 1 → strong.
+        # In both cases the preferred colour is the less-played one.
         diff = self.color_diff
-        if diff >= 2:
+        if diff >= 1:
             return ColorPref.BLACK
-        if diff <= -2:
+        if diff <= -1:
             return ColorPref.WHITE
 
-        # Mild: alternate from last colour
+        # Mild: alternate from last colour (diff == 0)
         if self.last_color == "white":
             return ColorPref.BLACK
         if self.last_color == "black":
@@ -118,10 +120,14 @@ class DutchPlayer:
         """
         if len(self.color_hist) == 0:
             return 0
-        if len(self.color_hist) >= 2 and self.color_hist[-1] == self.color_hist[-2]:
-            return 3  # Absolute
+        # Absolute: colour imbalance ≥ 2 OR 2+ same colour in a row
         diff = self.color_diff
         if abs(diff) >= 2:
+            return 3  # Absolute (imbalance)
+        if len(self.color_hist) >= 2 and self.color_hist[-1] == self.color_hist[-2]:
+            return 3  # Absolute (consecutive)
+        # Strong: colour imbalance of exactly 1
+        if abs(diff) == 1:
             return 2  # Strong
         if self.last_color is not None:
             return 1  # Mild
@@ -283,16 +289,27 @@ class DutchEngine(BasePairingEngine):
         Check *absolute* criteria — if False, this pairing is forbidden.
 
         B1: No repeat opponents
-        B5/B6: Colour constraints (unless last-round relaxation applies)
+        B5/B6: Colour constraints (unless last-round relaxation applies
+               for top scorers — matching bbpPairings' compatible())
         """
+        # Self-pairing is always forbidden
+        if p1.id == p2.id:
+            return False
+
         # B1 — no repeat
         if p2.id in p1.opponents:
             return False
 
         # B5/B6 — colour constraints
-        if not self._is_last_round:
-            if not self._has_legal_color_assignment(p1, p2):
-                return False
+        if not self._has_legal_color_assignment(p1, p2):
+            # Last-round relaxation: only for top scorers per bbpPairings.
+            # Top scorer threshold = (rounds_played * pointsForWin) / 2.
+            if self._is_last_round:
+                rounds_played = self.round_number - 1
+                top_threshold = rounds_played / 2.0
+                if p1.score > top_threshold or p2.score > top_threshold:
+                    return True
+            return False
 
         return True
 
@@ -580,10 +597,12 @@ class DutchEngine(BasePairingEngine):
         Score a bracket candidate per criteria C5-C19 (lower = better).
 
         Returns a tuple for lexicographic comparison where lower is better.
-        Criteria order: C5, C6, C10, C11, C12, C13, C14, C15,
+        Criteria order: C5, C6, CA1, CA2, C10, C11, C12, C13, C14, C15,
                         C16, C17, C18, C19.
-        (C7 next-bracket lookahead, C8/C9 topscorer colour are omitted
-         here — C8/C9 only matter in the final round with topscorers.)
+        CA1/CA2 are sub-levels of the colour criteria above C10, matching
+        bbpPairings' 4-level colour bit encoding:
+          CA1 = absolute colour imbalance conflict (both |diff|>=2, same pref)
+          CA2 = absolute colour preference conflict (both absolute, same pref)
         """
         # C5: maximize pairs → minimize negative
         c5 = -len(pairs)
@@ -598,6 +617,24 @@ class DutchEngine(BasePairingEngine):
             sds.append(df.score - artificial)
         sds.sort(reverse=True)
         c6 = tuple(sds)
+
+        # CA1: absolute colour imbalance conflict
+        # Penalty when BOTH players have |color_diff| >= 2 AND same preference.
+        ca1 = 0
+        for p1, p2 in pairs:
+            if (abs(p1.color_diff) >= 2 and abs(p2.color_diff) >= 2
+                    and p1.color_preference == p2.color_preference
+                    and p1.color_preference != ColorPref.NONE):
+                ca1 += 1
+
+        # CA2: absolute colour preference conflict
+        # Penalty when BOTH have absoluteColorPreference (strength 3) AND same pref.
+        ca2 = 0
+        for p1, p2 in pairs:
+            if (p1.preference_strength == 3 and p2.preference_strength == 3
+                    and p1.color_preference == p2.color_preference
+                    and p1.color_preference != ColorPref.NONE):
+                ca2 += 1
 
         # C10: minimize players not getting colour preference
         c10 = 0
@@ -627,15 +664,12 @@ class DutchEngine(BasePairingEngine):
             idx = len(p.float_hist) - n
             return p.float_hist[idx] if idx >= 0 else FloatDir.NONE
 
-        # C12: minimize repeat downfloats from previous round
+        # C12: minimize repeat downfloats from previous round.
+        # Only count REMAINDER players (downfloaters) — paired MDPs are
+        # successfully matched and are NOT downfloating further.
         c12 = 0
         for df in downfloaters:
             if _float_back(df, 1) == FloatDir.DOWN:
-                c12 += 1
-        for p1, p2 in pairs:
-            if p1.score > bracket_score and _float_back(p1, 1) == FloatDir.DOWN:
-                c12 += 1
-            if p2.score > bracket_score and _float_back(p2, 1) == FloatDir.DOWN:
                 c12 += 1
 
         # C13: minimize repeat upfloats from previous round
@@ -651,11 +685,6 @@ class DutchEngine(BasePairingEngine):
         for df in downfloaters:
             if _float_back(df, 2) == FloatDir.DOWN:
                 c14 += 1
-        for p1, p2 in pairs:
-            if p1.score > bracket_score and _float_back(p1, 2) == FloatDir.DOWN:
-                c14 += 1
-            if p2.score > bracket_score and _float_back(p2, 2) == FloatDir.DOWN:
-                c14 += 1
 
         # C15: minimize repeat upfloats from 2 rounds ago
         c15 = 0
@@ -670,9 +699,6 @@ class DutchEngine(BasePairingEngine):
         for df in downfloaters:
             if _float_back(df, 1) == FloatDir.DOWN:
                 c16 += df.score
-        for p1, p2 in pairs:
-            if p1.score > bracket_score and _float_back(p1, 1) == FloatDir.DOWN:
-                c16 += p1.score
 
         # C17: minimize opponent-score of repeat upfloaters (prev round)
         c17 = 0.0
@@ -687,9 +713,6 @@ class DutchEngine(BasePairingEngine):
         for df in downfloaters:
             if _float_back(df, 2) == FloatDir.DOWN:
                 c18 += df.score
-        for p1, p2 in pairs:
-            if p1.score > bracket_score and _float_back(p1, 2) == FloatDir.DOWN:
-                c18 += p1.score
 
         # C19: minimize opponent-score of repeat upfloaters (2 rounds ago)
         c19 = 0.0
@@ -699,7 +722,274 @@ class DutchEngine(BasePairingEngine):
             elif p2.score < p1.score and _float_back(p2, 2) == FloatDir.UP:
                 c19 += p1.score
 
-        return (c5, c6, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19)
+        return (c5, c6, ca1, ca2, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19)
+
+    # ------------------------------------------------------------------
+    # Maximum Weight Matching (Blossom algorithm)
+    # ------------------------------------------------------------------
+
+    def _compute_mwm_edge_weight(
+        self,
+        p1: DutchPlayer,
+        p2: DutchPlayer,
+        bracket_score: float,
+        n: int,
+        s1_ids: Set[int],
+        s2_ids: Set[int],
+        s1_pos: Dict[int, int],
+        s2_pos: Dict[int, int],
+        s_len: int,
+    ) -> int:
+        """
+        Compute per-edge weight encoding C.04.3 criteria C5–C19
+        plus S1/S2 ordering preference.
+
+        Higher weight = better pairing.  Returns 0 for incompatible pairs.
+
+        Bit layout (MSB → LSB, each level separated by *B* or *SB* bits):
+
+            compatible | C6 | color_compat | color_abs | C10 | C11
+                       | C12 | C13 | C14 | C15
+                       | C16 | C17 | C18 | C19
+                       | s1s2_cross | s1s2_closeness
+        """
+        if not self._can_pair(p1, p2):
+            return 0
+
+        # Bit widths — must be wide enough so that the sum over all pairs
+        # in a matching cannot overflow into the bits of a higher criterion.
+        B = max(8, n.bit_length() + 3)
+        max_score_int = max(1, int(self.total_rounds * 2))
+        SB = max(16, (n * max_score_int).bit_length() + 3)
+
+        pref1, pref2 = p1.color_preference, p2.color_preference
+        str1, str2 = p1.preference_strength, p2.preference_strength
+
+        def _fb(p: DutchPlayer, k: int) -> FloatDir:
+            idx = len(p.float_hist) - k
+            return p.float_hist[idx] if idx >= 0 else FloatDir.NONE
+
+        # ------- build weight from LSB (lowest priority) upward -------
+        w = 0
+        s = 0
+
+        # == S1/S2 ordering preference (lowest priority, tie-breaker) ==
+
+        # Position closeness within S1-S2 pairs
+        is_cross = ((p1.id in s1_ids and p2.id in s2_ids)
+                     or (p2.id in s1_ids and p1.id in s2_ids))
+        if is_cross and s_len > 0:
+            s1p_id = p1.id if p1.id in s1_ids else p2.id
+            s2p_id = p2.id if p2.id in s2_ids else p1.id
+            pos1 = s1_pos.get(s1p_id, 0)
+            pos2 = s2_pos.get(s2p_id, 0)
+            closeness = max(0, s_len - abs(pos1 - pos2))
+        else:
+            closeness = 0
+        w |= closeness << s
+        s += B
+
+        # Cross-half bonus (S1 paired with S2 preferred over intra-half)
+        w |= int(is_cross) << s
+        s += B
+
+        # == Float criteria C12–C19 ==
+
+        # C19: minimize opponent-score of repeat upfloaters (2 ago)
+        penalty = 0
+        if _fb(p1, 2) == FloatDir.UP and p1.score < p2.score:
+            penalty += int(p2.score * 2)
+        if _fb(p2, 2) == FloatDir.UP and p2.score < p1.score:
+            penalty += int(p1.score * 2)
+        w |= max(0, max_score_int - penalty) << s
+        s += SB
+
+        # C18: minimize score-sum of repeat downfloaters (2 ago)
+        penalty = 0
+        if _fb(p1, 2) == FloatDir.DOWN and p1.score > bracket_score:
+            penalty += int(p1.score * 2)
+        if _fb(p2, 2) == FloatDir.DOWN and p2.score > bracket_score:
+            penalty += int(p2.score * 2)
+        w |= max(0, max_score_int * 2 - penalty) << s
+        s += SB
+
+        # C17: minimize opponent-score of repeat upfloaters (prev)
+        penalty = 0
+        if _fb(p1, 1) == FloatDir.UP and p1.score < p2.score:
+            penalty += int(p2.score * 2)
+        if _fb(p2, 1) == FloatDir.UP and p2.score < p1.score:
+            penalty += int(p1.score * 2)
+        w |= max(0, max_score_int - penalty) << s
+        s += SB
+
+        # C16: minimize score-sum of repeat downfloaters (prev)
+        penalty = 0
+        if _fb(p1, 1) == FloatDir.DOWN and p1.score > bracket_score:
+            penalty += int(p1.score * 2)
+        if _fb(p2, 1) == FloatDir.DOWN and p2.score > bracket_score:
+            penalty += int(p2.score * 2)
+        w |= max(0, max_score_int * 2 - penalty) << s
+        s += SB
+
+        # C15: repeat upfloaters (2 ago)
+        c15 = 1
+        for p, opp in [(p1, p2), (p2, p1)]:
+            if _fb(p, 2) == FloatDir.UP and p.score < opp.score:
+                c15 = 0
+        w |= c15 << s
+        s += B
+
+        # C14: repeat downfloaters (2 ago)
+        c14 = 2
+        for p in (p1, p2):
+            if _fb(p, 2) == FloatDir.DOWN and p.score > bracket_score:
+                c14 -= 1
+        w |= max(0, c14) << s
+        s += B
+
+        # C13: repeat upfloaters (prev)
+        c13 = 1
+        for p, opp in [(p1, p2), (p2, p1)]:
+            if _fb(p, 1) == FloatDir.UP and p.score < opp.score:
+                c13 = 0
+        w |= c13 << s
+        s += B
+
+        # C12: repeat downfloaters (prev)
+        c12 = 2
+        for p in (p1, p2):
+            if _fb(p, 1) == FloatDir.DOWN and p.score > bracket_score:
+                c12 -= 1
+        w |= max(0, c12) << s
+        s += B
+
+        # == Colour criteria ==
+
+        # C11: strong colour preference violated
+        c11 = 1
+        if (pref1 != ColorPref.NONE and pref2 != ColorPref.NONE
+                and pref1 == pref2 and min(str1, str2) >= 2):
+            c11 = 0
+        w |= c11 << s
+        s += B
+
+        # C10: any colour preference violated
+        c10 = 1
+        if (pref1 != ColorPref.NONE and pref2 != ColorPref.NONE
+                and pref1 == pref2):
+            c10 = 0
+        w |= c10 << s
+        s += B
+
+        # Absolute colour preferences compatible
+        c_abs = 1
+        if (str1 == 3 and str2 == 3 and pref1 == pref2
+                and not self._is_last_round):
+            c_abs = 0
+        w |= c_abs << s
+        s += B
+
+        # Colour preferences broadly compatible
+        c_compat = 1
+        if (pref1 != ColorPref.NONE and pref2 != ColorPref.NONE
+                and pref1 == pref2 and str1 >= 2 and str2 >= 2):
+            c_compat = 0
+        w |= c_compat << s
+        s += B
+
+        # == C6: minimize PSD ==
+        score_diff_int = int(abs(p1.score - p2.score) * 2)
+        c6_val = max(0, max_score_int * 2 - score_diff_int)
+        w |= c6_val << s
+        s += SB
+
+        # == Bracket pairing (above C6): prefer MDP–resident pairings ==
+        # Matches bbpPairings' TIER 1 (lowerPlayerInCurrentBracket).
+        # When bracket has MDPs, edges involving ≥1 MDP with ≥1 resident
+        # get a bonus.  This prevents the MWM from leaving MDPs unpaired
+        # in favour of lower-PSD resident–resident pairs.
+        involves_mdp = (p1.score > bracket_score) or (p2.score > bracket_score)
+        involves_res = (p1.score <= bracket_score) or (p2.score <= bracket_score)
+        mdp_bonus = 1 if (involves_mdp and involves_res) else 0
+        w |= mdp_bonus << s
+        s += B
+
+        # Top bit: valid compatible pair
+        w |= 1 << s
+
+        return w
+
+    def _pair_bracket_mwm(
+        self,
+        players: List[DutchPlayer],
+        bracket_score: float,
+    ) -> Tuple[List[Tuple[DutchPlayer, DutchPlayer]], List[DutchPlayer]]:
+        """
+        Pair a bracket using Maximum Weight Matching (Edmonds' Blossom).
+
+        Replaces the S1/S2 + transposition + exchange pipeline with a
+        single call to ``networkx.max_weight_matching`` whose edge weights
+        encode the full C.04.3 C5–C19 priority, plus S1/S2 ordering
+        preference as a tie-breaker.
+
+        Returns ``(pairs, remainder)`` exactly like the legacy methods.
+        """
+        import networkx as nx
+
+        n = len(players)
+        if n < 2:
+            return [], list(players)
+
+        # --- Determine S1/S2 split ---
+        sorted_by_pn = sorted(players, key=lambda p: p.pairing_number)
+        mdps = [p for p in sorted_by_pn if p.score > bracket_score]
+        residents = [p for p in sorted_by_pn if p.score <= bracket_score]
+
+        if mdps:
+            s1 = mdps
+            s2 = residents
+        else:
+            half = n // 2
+            s1 = sorted_by_pn[:half]
+            s2 = sorted_by_pn[half:]
+
+        s1_ids: Set[int] = {p.id for p in s1}
+        s2_ids: Set[int] = {p.id for p in s2}
+        s1_pos: Dict[int, int] = {p.id: i for i, p in enumerate(s1)}
+        s2_pos: Dict[int, int] = {p.id: i for i, p in enumerate(s2)}
+        s_len = max(len(s1), len(s2))
+
+        # --- Build weighted graph ---
+        G = nx.Graph()
+        id_to_player = {p.id: p for p in players}
+        for p in players:
+            G.add_node(p.id)
+
+        for i in range(n):
+            for j in range(i + 1, n):
+                w = self._compute_mwm_edge_weight(
+                    players[i], players[j], bracket_score, n,
+                    s1_ids, s2_ids, s1_pos, s2_pos, s_len,
+                )
+                if w > 0:
+                    G.add_edge(players[i].id, players[j].id, weight=w)
+
+        matching = nx.max_weight_matching(G, maxcardinality=True)
+
+        matched_ids: set = set()
+        pairs: List[Tuple[DutchPlayer, DutchPlayer]] = []
+        for u, v in matching:
+            pu, pv = id_to_player[u], id_to_player[v]
+            if pu.pairing_number < pv.pairing_number:
+                pairs.append((pu, pv))
+            else:
+                pairs.append((pv, pu))
+            matched_ids.add(u)
+            matched_ids.add(v)
+
+        pairs.sort(key=lambda p: p[0].pairing_number)
+        remainder = [p for p in players if p.id not in matched_ids]
+        return pairs, remainder
 
     # ------------------------------------------------------------------
     # Core pairing logic for one scoregroup
@@ -754,8 +1044,8 @@ class DutchEngine(BasePairingEngine):
 
         def _is_perfect(sc: tuple) -> bool:
             """Check if the candidate score is perfect (no violations)."""
-            # sc = (c5, c6, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19)
-            # Perfect = c10..c19 all zero (C5/C6 are same for same-size bracket)
+            # sc = (c5, c6, ca1, ca2, c10, c11, c12, ..., c19)
+            # Perfect = ca1..c19 all zero (C5/C6 same for same-size bracket)
             return all(v == 0 or v == 0.0 for v in sc[2:])
 
         # --- Step 1+2: Try all transpositions of S2,
@@ -777,6 +1067,7 @@ class DutchEngine(BasePairingEngine):
             return best_pairs, best_remainder
 
         # --- Step 3: Try exchanges — compare against best from transpositions ---
+        exchange_evals = 0
         for new_s1, new_s2 in self._generate_exchanges(s1, s2):
             for s2_perm in self._generate_transpositions(new_s2, len(new_s1)):
                 result = self._try_pair_s1_s2(new_s1, s2_perm)
@@ -790,7 +1081,14 @@ class DutchEngine(BasePairingEngine):
                         best_score = score
                         best_pairs = result
                         best_remainder = remainder
-                    break  # First valid transposition for this exchange
+                        if _is_perfect(score):
+                            break
+                    exchange_evals += 1
+                    if exchange_evals >= self.MAX_JOINT_EVALS:
+                        break
+            else:
+                continue
+            break  # break outer loop when inner broke
         if best_pairs is not None:
             return best_pairs, best_remainder
 
@@ -926,6 +1224,266 @@ class DutchEngine(BasePairingEngine):
         all_players = mdps_sorted + residents_sorted
         all_players.sort(key=lambda p: (-p.score, p.pairing_number))
         return self._pair_scoregroup(all_players)
+
+    # ------------------------------------------------------------------
+    # C.7 — Completion-aware bracket pairing
+    # ------------------------------------------------------------------
+
+    def _can_complete(
+        self,
+        remainder: List[DutchPlayer],
+        future_players: List[DutchPlayer],
+    ) -> bool:
+        """
+        Check whether ``remainder`` + ``future_players`` can form a complete
+        round-pairing (C.4/C.7).  Returns True if a valid matching exists
+        where at most one player is left unpaired.
+
+        Uses a fast greedy check first, then a full backtracking search
+        only if the greedy check fails.
+        """
+        all_remaining = remainder + future_players
+        n = len(all_remaining)
+        if n <= 1:
+            return True
+
+        # Quick check: every player must be pairable with at least one other
+        for i, p1 in enumerate(all_remaining):
+            has_partner = False
+            for j, p2 in enumerate(all_remaining):
+                if i != j and self._can_pair(p1, p2):
+                    has_partner = True
+                    break
+            if not has_partner and n % 2 == 0:
+                # Even count — everyone must be paired; this player can't be
+                return False
+
+        # Full check via backtracking (at most ~100 players typically)
+        result = self._backtrack_match(all_remaining)
+        if result is None:
+            return False
+        # Must pair all but at most 1
+        paired_count = len(result) * 2
+        return paired_count >= n - 1
+
+    def _pair_bracket_c7(
+        self,
+        mdps: List[DutchPlayer],
+        residents: List[DutchPlayer],
+        future_players: List[DutchPlayer],
+        heterogeneous: bool,
+    ) -> Tuple[List[Tuple[DutchPlayer, DutchPlayer]], List[DutchPlayer]]:
+        """
+        Pair a bracket with C.7 completion awareness.
+
+        Checks whether the remainder from this bracket can form a valid
+        matching together with all future players.  If not, retries with
+        alternative candidates.
+        """
+        if heterogeneous:
+            pairs, rem = self._pair_heterogeneous_bracket(mdps, residents)
+        else:
+            pairs, rem = self._pair_scoregroup(residents)
+
+        # When rem is empty the current bracket paired everyone — accept.
+        if not rem or self._can_complete(rem, future_players):
+            return pairs, rem
+
+        # --- Retry with completion-aware search ---
+        logger.debug(
+            "C.7: first candidate produces uncompletable remainder %s, retrying",
+            [p.id for p in rem],
+        )
+
+        bracket_score = residents[0].score if residents else 0.0
+
+        if heterogeneous:
+            candidates = self._generate_hetero_candidates(mdps, residents)
+        else:
+            candidates = self._generate_homo_candidates(residents)
+
+        best_pairs = None
+        best_score = None
+        best_rem: List[DutchPlayer] = []
+        tried = 0
+
+        for cand_pairs, cand_rem in candidates:
+            tried += 1
+            if tried > self.MAX_JOINT_EVALS:
+                break
+            if not self._can_complete(cand_rem, future_players):
+                continue
+            score = self._score_candidate(cand_pairs, cand_rem, bracket_score)
+            if best_score is None or score < best_score:
+                best_score = score
+                best_pairs = cand_pairs
+                best_rem = cand_rem
+
+        if best_pairs is not None:
+            best_rem.sort(key=lambda p: (-p.score, p.pairing_number))
+            return best_pairs, best_rem
+
+        # Completion not possible with structured approaches — fall back
+        return pairs, rem
+
+    def _generate_homo_candidates(
+        self, group: List[DutchPlayer],
+    ):
+        """
+        Yield (pairs, remainder) candidates for a homogeneous bracket.
+        """
+        if len(group) < 2:
+            yield [], list(group)
+            return
+
+        s1, s2 = self._split_scoregroup(group)
+        if not s1:
+            yield [], list(group)
+            return
+
+        bracket_score = group[0].score
+
+        # Transpositions
+        for s2_perm in self._generate_transpositions(s2, len(s1)):
+            result = self._try_pair_s1_s2(s1, s2_perm)
+            if result is not None:
+                used = set(id(p) for p in s2_perm[:len(s1)])
+                remainder = [p for p in s2 if id(p) not in used]
+                yield result, remainder
+
+        # Exchanges
+        for new_s1, new_s2 in self._generate_exchanges(s1, s2):
+            for s2_perm in self._generate_transpositions(new_s2, len(new_s1)):
+                result = self._try_pair_s1_s2(new_s1, s2_perm)
+                if result is not None:
+                    used = set(id(p) for p in s2_perm[:len(new_s1)])
+                    remainder = [p for p in new_s2 if id(p) not in used]
+                    yield result, remainder
+
+    def _generate_hetero_candidates(
+        self, mdps: List[DutchPlayer], residents: List[DutchPlayer],
+    ):
+        """
+        Yield (pairs, remainder) candidates for a heterogeneous bracket.
+        """
+        mdps_sorted = sorted(mdps, key=lambda p: p.pairing_number)
+        residents_sorted = sorted(residents, key=lambda p: p.pairing_number)
+
+        m1 = min(len(mdps_sorted), len(residents_sorted))
+        if m1 == 0:
+            # Can't pair MDPs — yield homogeneous candidates for residents
+            all_rem = mdps_sorted + residents_sorted
+            all_rem.sort(key=lambda p: (-p.score, p.pairing_number))
+            yield from self._generate_homo_candidates(all_rem)
+            return
+
+        bracket_score = residents_sorted[0].score if residents_sorted else 0.0
+        s1 = mdps_sorted[:m1]
+        limbo = mdps_sorted[m1:]
+
+        for s2_perm in self._generate_transpositions(residents_sorted, len(s1)):
+            mdp_result = self._try_pair_s1_s2(s1, s2_perm)
+            if mdp_result is None:
+                continue
+
+            paired_resident_ids = {r.id for _, r in mdp_result}
+            unpaired_residents = [
+                p for p in residents_sorted if p.id not in paired_resident_ids
+            ]
+
+            if unpaired_residents:
+                # Try each homogeneous candidate for the remainder
+                for rem_pairs, rem_downfloaters in self._generate_homo_candidates(
+                    unpaired_residents
+                ):
+                    all_pairs = mdp_result + rem_pairs
+                    all_downfloaters = list(limbo) + rem_downfloaters
+                    yield all_pairs, all_downfloaters
+            else:
+                yield mdp_result, list(limbo)
+
+    def _pair_heterogeneous_with_lookahead(
+        self,
+        mdps: List[DutchPlayer],
+        residents: List[DutchPlayer],
+        next_sg: Optional[List[DutchPlayer]],
+    ) -> Tuple[List[Tuple[DutchPlayer, DutchPlayer]], List[DutchPlayer]]:
+        """
+        Pair a heterogeneous bracket with 1-step lookahead.
+
+        Compares two strategies:
+        A) Pair max MDPs in this bracket (standard behaviour).
+        B) Skip MDP pairings — pair only residents as homogeneous,
+           let MDPs float to the next scoregroup.
+
+        When a *next_sg* is available, each strategy's remainder is
+        tentatively paired with the next scoregroup.  The combined quality
+        across both brackets is compared using a unified metric that treats
+        pairs from either bracket equally (total pairs, then colour
+        violations, then PSD).
+        """
+        bracket_score = residents[0].score if residents else 0.0
+
+        # --- Option A: standard heterogeneous pairing (pair max MDPs) ---
+        pairs_a, rem_a = self._pair_heterogeneous_bracket(mdps, residents)
+
+        # Without a next scoregroup, lookahead is impossible.
+        if next_sg is None or len(mdps) < 1:
+            return pairs_a, rem_a
+
+        # --- Option B: skip MDP pairings, pair only residents ---
+        res_pairs, res_rem = self._pair_scoregroup(list(residents))
+        rem_b = sorted(
+            list(mdps) + res_rem,
+            key=lambda p: (-p.score, p.pairing_number),
+        )
+
+        # --- Simulate next bracket for both options ---
+        # Option A next bracket
+        if rem_a:
+            next_pairs_a, next_rem_a = self._pair_heterogeneous_bracket(
+                rem_a, list(next_sg),
+            )
+        else:
+            next_pairs_a, next_rem_a = self._pair_scoregroup(list(next_sg))
+
+        # Option B next bracket
+        next_pairs_b, next_rem_b = self._pair_heterogeneous_bracket(
+            rem_b, list(next_sg),
+        )
+
+        # --- Compare using unified quality across both brackets ---
+        all_a = pairs_a + next_pairs_a
+        all_b = res_pairs + next_pairs_b
+
+        quality_a = self._combined_quality(all_a, next_rem_a)
+        quality_b = self._combined_quality(all_b, next_rem_b)
+
+        if quality_b < quality_a:
+            return res_pairs, rem_b
+        return pairs_a, rem_a
+
+    @staticmethod
+    def _combined_quality(
+        pairs: List[Tuple["DutchPlayer", "DutchPlayer"]],
+        final_remainder: List["DutchPlayer"],
+    ) -> tuple:
+        """
+        Unified quality metric across multiple brackets.
+
+        Returns a tuple (lower is better):
+        (-total_pairs, color_violations, total_psd, remainder_count)
+        """
+        n_pairs = len(pairs)
+        n_color = 0
+        total_psd = 0.0
+        for p1, p2 in pairs:
+            pref1, pref2 = p1.color_preference, p2.color_preference
+            if (pref1 != ColorPref.NONE and pref2 != ColorPref.NONE
+                    and pref1 == pref2):
+                n_color += 1
+            total_psd += abs(p1.score - p2.score)
+        return (-n_pairs, n_color, total_psd, len(final_remainder))
 
     def _backtrack_match(
         self, players: List[DutchPlayer], relaxed: bool = False,
@@ -1109,16 +1667,25 @@ class DutchEngine(BasePairingEngine):
             paired: List[Tuple[DutchPlayer, DutchPlayer]] = []
             remainder: List[DutchPlayer] = []
 
-            for sg in scoregroups:
+            for idx, sg in enumerate(scoregroups):
                 sg_score = sg[0].score if sg else 0.0
+
+                # Collect future players (all remaining scoregroups)
+                future_players: List[DutchPlayer] = []
+                for future_sg in scoregroups[idx + 1:]:
+                    future_players.extend(future_sg)
 
                 if remainder:
                     # Heterogeneous bracket: MDPs + residents
-                    sg_pairs, remainder = self._pair_heterogeneous_bracket(
-                        remainder, list(sg)
+                    sg_pairs, remainder = self._pair_bracket_c7(
+                        remainder, list(sg), future_players,
+                        heterogeneous=True,
                     )
                 else:
-                    sg_pairs, remainder = self._pair_scoregroup(list(sg))
+                    sg_pairs, remainder = self._pair_bracket_c7(
+                        [], list(sg), future_players,
+                        heterogeneous=False,
+                    )
 
                 paired.extend(sg_pairs)
                 self._record_floats(sg_pairs, sg_score)

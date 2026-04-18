@@ -244,11 +244,24 @@
 > The cross-validation gap (3.1) is caused by architectural differences. Our bracket-by-bracket
 > greedy approach diverges from bbpPairings' global maximum-weight matching on larger brackets.
 
-- [ ] Profile which C.04.3 criteria cause the most divergence (log `_score_candidate()` tuples for mismatched rounds)
-- [ ] Investigate global matching (e.g. Blossom V / maximum-weight matching) as alternative to greedy S1/S2 traversal
-- [ ] Improve float limit enforcement (consecutive same-direction floats — C.04.3 §A5–A7)
+- [x] Profile which C.04.3 criteria cause the most divergence (divergence profiling script)
+- [x] FPC: exclude forfeit game colours from `color_hist` (bbpPairings' `gameWasPlayed` check)
+- [x] FPC: forfeit float direction matches bbpPairings ("+" → down, "-" → none)
+- [x] FPC: exclude forfeit opponents from `previous_pairings` (bbpPairings only forbids played opponents)
+- [x] Engine: `color_preference` for |diff|==1 now equalises (strong) instead of alternating (mild)
+- [x] Engine: `preference_strength` — |diff|>=2 is absolute (3), |diff|==1 is strong (2)
+- [x] Engine: exchange phase now tries all transpositions per exchange (was only first valid)
+- [x] Engine: last-round colour relaxation only for top scorers (matching bbpPairings' `compatible()`)
+- [x] Engine: `_score_candidate` adds CA1/CA2 absolute colour sub-criteria above C10
+- [x] Engine: C12/C14/C16/C18 only count remainder downfloaters (not paired MDPs)
+- [ ] Investigate global matching (e.g. Blossom V / maximum-weight matching) — MWM code added but not yet integrated
 - [ ] Target: ≤10 discrepancies on both A.7 paths (3.1) for 20p/9r and 10p/5r configurations
-- **Files:** `src/caissify_pairings/engines/dutch.py`
+- **Updated cross-validation baseline (smoke 10 tournaments):**
+  - Path A 10p5r: 11/50 rounds mismatched, 74 discrepancies (was 120)
+  - Path A 20p9r: 37/90 rounds mismatched, 556 discrepancies (was 746)
+  - Path B 10p5r: 12/50 rounds mismatched, 28 discrepancies (was 43)
+  - Path B 20p9r: 41/90 rounds mismatched, 292 discrepancies (was 367)
+- **Files:** `src/caissify_pairings/engines/dutch.py`, `src/caissify_pairings/fpc.py`
 
 ### 3.3 — FE-1 application & submission documentation
 - [ ] Fill out FE-1 form (Annex-1): program name, author, version, pairing system, contact

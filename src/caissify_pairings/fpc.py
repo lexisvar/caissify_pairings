@@ -294,7 +294,12 @@ def _build_engine_players(
                 # Z/- → 0
             else:
                 color = r.get("color", "w")
-                color_hist.append("white" if color == "w" else "black")
+                # Only count colours from actually played games.
+                # bbpPairings' computePlayerData() checks gameWasPlayed
+                # and skips forfeits (+/-) for colour preference.
+                game_was_played = res in ("1", "0", "=", "D")
+                if game_was_played:
+                    color_hist.append("white" if color == "w" else "black")
                 if res == "1":
                     score += 1.0
                 elif res in ("=", "D"):
@@ -303,15 +308,24 @@ def _build_engine_players(
                     score += 1.0
                 # 0, -, L → 0
 
-                # Compute float direction: compare pre-round scores
-                my_pre_score = score_at[sn].get(rnd - 1, 0.0)
-                opp_pre_score = score_at[opp].get(rnd - 1, 0.0)
-                if my_pre_score > opp_pre_score:
-                    float_history.append("down")
-                elif my_pre_score < opp_pre_score:
-                    float_history.append("up")
+                # Compute float direction.
+                # For unplayed games bbpPairings uses:
+                #   points > pointsForLoss → DOWN, else NONE
+                # For played games: compare pre-round scores.
+                if not game_was_played:
+                    if res == "+":
+                        float_history.append("down")
+                    else:
+                        float_history.append("none")
                 else:
-                    float_history.append("none")
+                    my_pre_score = score_at[sn].get(rnd - 1, 0.0)
+                    opp_pre_score = score_at[opp].get(rnd - 1, 0.0)
+                    if my_pre_score > opp_pre_score:
+                        float_history.append("down")
+                    elif my_pre_score < opp_pre_score:
+                        float_history.append("up")
+                    else:
+                        float_history.append("none")
 
         engine_players.append({
             "id": sn,
@@ -338,8 +352,14 @@ def _build_previous_pairings(
         for rnd in range(1, target_round):
             r = p.get("results", {}).get(rnd)
             if r and r.get("opponent"):
-                a, b = sn, r["opponent"]
-                pairs.add((min(a, b), max(a, b)))
+                # bbpPairings only forbids re-pairing opponents from
+                # actually played games.  Forfeit results (+/-) are
+                # unplayed and the opponents may meet again.
+                res = r.get("result", "-")
+                game_was_played = res in ("1", "0", "=", "D")
+                if game_was_played:
+                    a, b = sn, r["opponent"]
+                    pairs.add((min(a, b), max(a, b)))
     return pairs
 
 

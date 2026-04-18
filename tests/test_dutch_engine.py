@@ -62,10 +62,17 @@ class TestDutchPlayerDataclass(unittest.TestCase):
         self.assertEqual(p.preference_strength, 0)
 
     def test_color_preference_mild(self):
+        # One game played → imbalance = 1 → strong (not mild) per bbpPairings
         p = DutchPlayer(id=1, name="A", score=0, rating=2000, pairing_number=1,
                         starting_number=1, color_hist=["white"])
         self.assertEqual(p.color_preference, ColorPref.BLACK)
-        self.assertEqual(p.preference_strength, 1)
+        self.assertEqual(p.preference_strength, 2)  # strong (imbalance 1)
+
+        # Truly mild: balanced colours, alternate from last
+        p2 = DutchPlayer(id=2, name="B", score=0, rating=2000, pairing_number=2,
+                         starting_number=2, color_hist=["white", "black"])
+        self.assertEqual(p2.color_preference, ColorPref.WHITE)
+        self.assertEqual(p2.preference_strength, 1)  # mild (alternation)
 
     def test_color_preference_strong(self):
         p = DutchPlayer(id=1, name="A", score=0, rating=2000, pairing_number=1,
@@ -74,9 +81,9 @@ class TestDutchPlayerDataclass(unittest.TestCase):
 
         p2 = DutchPlayer(id=2, name="B", score=0, rating=2000, pairing_number=2,
                          starting_number=2, color_hist=["white", "white", "black", "white"])
-        # diff = +2 → strong for black
+        # diff = +2 → absolute for black (imbalance ≥ 2)
         self.assertEqual(p2.color_preference, ColorPref.BLACK)
-        self.assertEqual(p2.preference_strength, 2)
+        self.assertEqual(p2.preference_strength, 3)
 
     def test_color_preference_absolute(self):
         p = DutchPlayer(id=1, name="A", score=0, rating=2000, pairing_number=1,
