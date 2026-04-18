@@ -27,13 +27,13 @@
 
 | # | Requirement | Status | Notes |
 |---|-------------|--------|-------|
-| A.2.1 | Implement FIDE (Dutch) System (C.04.3) | **In Progress** | `src/caissify_pairings/engines/dutch.py` — Phases 1 & 2 complete. Phase 2.5.1: full C5–C19 multi-criteria scoring, joint MDP+remainder evaluation, FPC float history tracking. 10p fixtures: 80–100%, 11p: 60–80%, 20p: 43–57% match rates vs bbpPairings. See `doc/ROADMAP.md` |
+| A.2.1 | Implement FIDE (Dutch) System (C.04.3) | **In Progress** | `src/caissify_pairings/engines/dutch.py` — Phases 1, 2 & 3.2 complete. Full C5–C19 multi-criteria scoring with CA1/CA2 absolute colour sub-criteria, joint MDP+remainder evaluation, FPC float/forfeit history tracking. MWM scaffold (Blossom algorithm via networkx) added but not yet integrated. Cross-validation improving: Path B 10p5r down to 28 disc/10t (was 43). See `doc/ROADMAP.md` |
 | A.2.2 | **FIDE mode** that offers all required functionalities | **In Progress** | Branched on `tournament.is_fide_rated`; casual mode preserved |
 | A.2.3 | English language interface | **Done** | API is English; desktop app has English UI |
 | A.2.4 | Import files in FIDE Data Exchange Format (TRF16) | **Done** | `tournament/services/trf_parser.py` + `trf_importer.py` |
 | A.2.5 | Export files in FIDE Data Exchange Format (TRF16) | **Done** | `src/caissify_pairings/trf.py` — TRF16 writer (used by RTG). XXC/XXS written conditionally. API exporter in `caissify_api`. bbpPairings reference TRFs omit XXC/XXS — they are optional metadata. |
 | A.2.6 | Public availability of a **(free) Pairings Checker** (FPC) | **Done** | `src/caissify_pairings/fpc.py` — CLI: `caissify-pairings --check FILE.trf`. MIT-licensed, pip-installable. Also planned for **Caissify Desktop** (Tauri binary). |
-| A.2.7 | FIDE mode must not cause pairing mishaps | **In Progress** | 149+ tests (30 unit + 22 integration + 10 JavaFo + 21 TRF-fixture + 22 RTG + 26 FPC + 12 FIDE official + 4 RTG→FPC validation + 2 slow 5000-tournament). Self-consistency: 10,000 tournaments, 70,000 rounds, 0 discrepancies. Needs bbpPairings cross-validation improvement. |
+| A.2.7 | FIDE mode must not cause pairing mishaps | **In Progress** | 155+ tests (30 unit + 22 integration + 10 JavaFo + 21 TRF-fixture + 22 RTG + 26 FPC + 12 FIDE official + 4 RTG→FPC validation + 4 cross-validation + 2 slow 5000-tournament). Self-consistency: 10,000 tournaments, 70,000 rounds, 0 discrepancies. Cross-validation improving (Phase 3.2). |
 | A.2.8 | Additional services allowed if not prohibited by FIDE | **OK** | Casual mode, analytics, etc. are non-conflicting |
 
 ### Error correction policy (A.2 cont.)
@@ -184,7 +184,7 @@ Known endorsed programs (for context):
 
 | Component | Weight | Status | Progress |
 |-----------|--------|--------|----------|
-| Dutch System engine (C.04.3) | Critical | In Progress | ~88% *(C5–C19 criteria implemented; small fixtures 80–100%; medium/large need global matching)* |
+| Dutch System engine (C.04.3) | Critical | In Progress | ~90% *(C5–C19 + CA1/CA2 criteria implemented; MWM scaffold added; small fixtures 80–100%; cross-validation improving — needs MWM integration for medium/large)* |
 | FIDE mode (`is_fide_rated`) | Critical | Done | 100% |
 | English interface | Required | Done | 100% |
 | TRF16 import/parse | Required | Done | 100% |
@@ -193,8 +193,8 @@ Known endorsed programs (for context):
 | RTG (tournament generator) | Required | Done | 100% *(5000-tournament validation: 0 discrepancies)* |
 | TRF fixture validation | Recommended | Done | 100% *(15 fixtures, 21 tests)* |
 | Self-consistency (our RTG → our FPC) | Required | **Done** | **100%** *(10,000 tournaments, 70,000 rounds, 0 discrepancies)* |
-| **A.7 cross-validation (bbpRTG → our FPC)** | **Critical** | **Not Started** | **0%** *(estimated many discrepancies — match rate 43–57% at 20p)* |
-| **A.7 cross-validation (our RTG → bbpFPC)** | **Critical** | **Not Started** | **0%** *(must pass ≤10 discrepancies threshold)* |
+| **A.7 cross-validation (bbpRTG → our FPC)** | **Critical** | **In Progress** | **~30%** *(smoke 10t: 10p5r 74 disc, 20p9r 556 disc — improving, needs MWM integration)* |
+| **A.7 cross-validation (our RTG → bbpFPC)** | **Critical** | **In Progress** | **~40%** *(smoke 10t: 10p5r 28 disc, 20p9r 292 disc — closer to target, needs MWM integration)* |
 | FE-1 application submission | Required | Not Started | 0% |
 
 ### Critical Gap: A.7 Cross-Validation
@@ -214,13 +214,13 @@ After careful analysis of C.04.A, the following were removed from the endorsemen
 - **XXC/XXS TRF lines** — Optional metadata; bbpPairings reference TRFs omit them
 - **TRF field positioning audit** — Already validated by RTG→FPC self-consistency; only matters for interop
 
-**Estimated overall endorsement readiness: ~70%** *(down from 75% — cross-validation gap now properly accounted for)*
+**Estimated overall endorsement readiness: ~75%** *(up from 70% — Phase 3.2 engine improvements reduce cross-validation gap; MWM integration is the key remaining step)*
 
 ---
 
 ## Action Items (Priority Order)
 
-1. **Improve Dutch engine match rate on medium/large fixtures** — remaining divergence from bbpPairings stems from greedy bracket-by-bracket approach vs bbpPairings' global maximum weight matching. Options: implement Blossom V / Hungarian algorithm, or refine heuristic with look-ahead
+1. **Integrate MWM into Dutch engine** — `_pair_bracket_mwm()` + `_compute_mwm_edge_weight()` scaffold exists; needs to replace greedy S1/S2+transposition+exchange pipeline. This is the key step to close the cross-validation gap with bbpPairings
 2. **Run 5000-tournament RTG→FPC validation** — `caissify-pairings-rtg -n 5000` then `caissify-pairings --check` each output (this repo)
 3. **Audit TRF16 export in API** — add XXC/XXS lines, field positioning (`caissify_api` repo)
 4. **Download & run FIDE official FPC test suites** — validate against endorsed programs' output

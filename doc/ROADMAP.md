@@ -2,9 +2,9 @@
 
 > **Goal:** Implement a FIDE C.04.3 compliant Dutch System pairing engine eligible for FIDE software endorsement.  
 > **Started:** April 17, 2026  
-> **Last Updated:** April 18, 2026  
+> **Last Updated:** April 18, 2026 (Phase 3.2 engine improvements committed)  
 > **Overall Progress:** 28/31 tasks complete  
-> **Note:** Phase 3 restructured Apr 18 — removed non-endorsement items, added cross-validation  
+> **Note:** Phase 3.2 in progress — 10 engine/FPC fixes committed, MWM scaffold added  
 > **Package:** [`caissify-pairings`](https://github.com/lexisvar/caissify_pairings) v0.1.0  
 > **Consumers:** [`caissify_api`](https://github.com/lexisvar/caissify_api) (Django API), `caissify_tm` (Tauri desktop app)
 
