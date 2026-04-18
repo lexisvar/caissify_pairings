@@ -1,0 +1,13 @@
+012 AutoTest Tournament 42
+001    1      Test0001 Player0001               2568                             2.5    5     6 b =     4 w 0    10 b 1     8 w 1     2 b 0
+001    2      Test0002 Player0002               2542                             3.0    3     7 w 1     5 b 0     3 w 0     9 b 1     1 w 1
+001    3      Test0003 Player0003               2527                             4.0    1     8 b =     6 w 1     2 b 1     4 w =     5 b 1
+001    4      Test0004 Player0004               2507                             4.0    2     9 w 1     1 b 1     5 w =     3 b =     6 w 1
+001    5      Test0005 Player0005               2371                             3.0    4    10 b 1     2 w 1     4 b =     6 w =     3 w 0
+001    6      Test0006 Player0006               2344                             2.0    7     1 w =     3 b 0     7 w 1     5 b =     4 b 0
+001    7      Test0007 Player0007               2320                             2.5    6     2 b 0     8 w =     6 b 0    10 w 1     9 b 1
+001    8      Test0008 Player0008               2183                             1.5    8     3 w =     7 b =     9 w =     1 b 0    10 w 0
+001    9      Test0009 Player0009               2070                             1.0   10     4 b 0    10 w =     8 b =     2 w 0     7 w 0
+001   10      Test0010 Player0010               2046                             1.5    9     5 w 0     9 b =     1 w 0     7 b 0     8 b 1
+
+092 FIDE_DUTCH_2025

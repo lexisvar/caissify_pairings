@@ -1,0 +1,23 @@
+012 AutoTest Tournament 42
+001    1      Test0001 Player0001               2603                             5.5    1    11 w 1     6 b 1     3 w 0     2 b 1     7 b 1     5 w 1     4 w =
+001    2      Test0002 Player0002               2588                             4.0    7    12 b 1     7 w 0    10 b 1     1 w 0    14 b -     6 b 1     9 w 1
+001    3      Test0003 Player0003               2570                             5.0    2    13 w 1     8 b 1     1 b 1     7 w =     5 b +     4 b =    15 w -
+001    4      Test0004 Player0004               2568                             4.5    3    14 b =    20 w 1     5 b 0     9 w 1    15 b 1     3 w =     1 b =
+001    5      Test0005 Player0005               2542                             4.5    4    15 w 1     9 b =     4 w 1     6 b 1     3 w -     1 b 0    14 w 1
+001    6      Test0006 Player0006               2527                             3.5    9    16 b 1     1 w 0    11 b 1     5 w 0    12 b =     2 w 0    10 b 1
+001    7      Test0007 Player0007               2518                             4.0    8    17 w 1     2 b 1     9 w 1     3 b =     1 w 0    14 b =     8 w -
+001    8      Test0008 Player0008               2507                             4.5    5    18 b 1     3 w 0    14 b =    15 w 0    20 b 1    10 w 1     7 b +
+001    9      Test0009 Player0009               2408                             3.0   12    19 w 1     5 w =     7 b 0     4 b 0    18 w =    13 b +     2 b 0
+001   10      Test0010 Player0010               2371                             3.0   13    20 b =    14 w =     2 w 0    13 b 1    17 w 1     8 b 0     6 w 0
+001   11      Test0011 Player0011               2349                             3.5   10     1 b 0    16 w 1     6 w 0    18 b =    13 w 0    17 b 1    12 b 1
+001   12      Test0012 Player0012               2344                             2.5   15     2 w 0    17 b 0    16 w 1    19 b 1     6 w =    15 b 0    11 w 0
+001   13      Test0013 Player0013               2335                             2.0   19     3 b 0    18 w =    19 b =    10 w 0    11 b 1     9 w -    16 w 0
+001   14      Test0014 Player0014               2320                             3.5   11     4 w =    10 b =     8 w =    17 b =     2 w +     7 w =     5 b 0
+001   15      Test0015 Player0015               2303                             4.5    6     5 b 0    19 w =    20 b 1     8 b 1     4 w 0    12 w 1     3 b +
+001   16      Test0016 Player0016               2278                             2.5   16     6 w 0    11 b 0    12 b 0    20 w 0    19 w =    18 b 1    13 b 1
+001   17      Test0017 Player0017               2183                             3.0   14     7 b 0    12 w 1    18 b =    14 w =    10 b 0    11 w 0    19 w 1
+001   18      Test0018 Player0018               2070                             2.5   17     8 w 0    13 b =    17 w =    11 w =     9 b =    16 w 0    20 b =
+001   19      Test0019 Player0019               2066                             2.0   20     9 b 0    15 b =    13 w =    12 w 0    16 b =    20 w =    17 b 0
+001   20      Test0020 Player0020               2046                             2.5   18    10 w =     4 b 0    15 w 0    16 b 1     8 w 0    19 b =    18 w =
+
+092 FIDE_DUTCH_2025

@@ -504,6 +504,27 @@ class DutchEngine(BasePairingEngine):
         """
         return sum(abs(p1.score - p2.score) for p1, p2 in pairings)
 
+    @staticmethod
+    def _colour_violations(pairings: List[Tuple[DutchPlayer, DutchPlayer]]) -> int:
+        """
+        Count the number of unsatisfied colour preferences (C.04.3 C6).
+
+        For each pair, check if there exists a colour assignment that
+        satisfies both players' colour preferences.  If not, count the
+        pair as 1 violation (one of the two will not get their preference).
+        """
+        violations = 0
+        for p1, p2 in pairings:
+            pref1 = p1.color_preference
+            pref2 = p2.color_preference
+            if pref1 == ColorPref.NONE or pref2 == ColorPref.NONE:
+                continue  # at least one has no preference → satisfied
+            if pref1 != pref2:
+                continue  # different preferences → both satisfied
+            # Both want the same colour → one will be violated
+            violations += 1
+        return violations
+
     # ------------------------------------------------------------------
     # Core pairing logic for one scoregroup
     # ------------------------------------------------------------------
@@ -529,12 +550,12 @@ class DutchEngine(BasePairingEngine):
         self, group: List[DutchPlayer]
     ) -> Tuple[List[Tuple[DutchPlayer, DutchPlayer]], List[DutchPlayer]]:
         """
-        Pair a scoregroup using the Dutch method (C.04.3 §C).
+        Pair a homogeneous scoregroup using the Dutch method (C.04.3 §B/C).
 
         Steps:
         1. Split into S1 and S2
         2. Try default S1[i] vs S2[i]
-        3. Try all transpositions of S2
+        3. Try all transpositions of S2 (pick one with best colour quality)
         4. Try all exchanges between S1 and S2 with transpositions
         5. Return (pairs, remainder)
         """
@@ -548,42 +569,47 @@ class DutchEngine(BasePairingEngine):
         if len(s1) == 0:
             return [], list(group)
 
-        # --- Step 1: Try default pairing ---
-        result = self._try_pair_s1_s2(s1, s2[:len(s1)])
-        if result is not None:
-            remainder = s2[len(s1):]
-            return result, remainder
-
-        # --- Step 2: Try transpositions of S2 ---
+        # --- Step 1+2: Try default pairing and transpositions of S2,
+        #     pick the candidate with lowest colour violations (C6),
+        #     breaking ties by transposition order (lexicographic = default
+        #     first). ---
         best_pairs = None
+        best_cv = float("inf")
         best_quality = float("inf")
         best_remainder: List[DutchPlayer] = []
 
         for s2_perm in self._generate_transpositions(s2, len(s1)):
             result = self._try_pair_s1_s2(s1, s2_perm)
             if result is not None:
+                cv = self._colour_violations(result)
                 q = self._pairing_quality(result)
                 used = set(id(p) for p in s2_perm[:len(s1)])
                 remainder = [p for p in s2 if id(p) not in used]
-                if q < best_quality:
+                if cv < best_cv or (cv == best_cv and q < best_quality):
+                    best_cv = cv
                     best_quality = q
                     best_pairs = result
                     best_remainder = remainder
-                if q == 0:
-                    break
+                if cv == 0 and q == 0:
+                    break  # Perfect pairing, no need to continue
 
         if best_pairs is not None:
             return best_pairs, best_remainder
 
         # --- Step 3: Try exchanges ---
+        best_cv = float("inf")
+        best_quality = float("inf")
+
         for new_s1, new_s2 in self._generate_exchanges(s1, s2):
             for s2_perm in self._generate_transpositions(new_s2, len(new_s1)):
                 result = self._try_pair_s1_s2(new_s1, s2_perm)
                 if result is not None:
+                    cv = self._colour_violations(result)
                     q = self._pairing_quality(result)
                     used = set(id(p) for p in s2_perm[:len(new_s1)])
                     remainder = [p for p in new_s2 if id(p) not in used]
-                    if q < best_quality:
+                    if cv < best_cv or (cv == best_cv and q < best_quality):
+                        best_cv = cv
                         best_quality = q
                         best_pairs = result
                         best_remainder = remainder
@@ -604,6 +630,110 @@ class DutchEngine(BasePairingEngine):
 
         # --- Step 5: Truly cannot pair → all become remainder ---
         return [], list(group)
+
+    def _pair_heterogeneous_bracket(
+        self,
+        mdps: List[DutchPlayer],
+        residents: List[DutchPlayer],
+    ) -> Tuple[List[Tuple[DutchPlayer, DutchPlayer]], List[DutchPlayer]]:
+        """
+        Pair a heterogeneous bracket (C.04.3 §B.2-B.3, B.7).
+
+        A heterogeneous bracket contains MDPs (moved-down players from the
+        previous bracket) and resident players.  The pairing proceeds in
+        two phases:
+
+        1. MDP-Pairing: S1 = MDPs (highest first), S2 = residents.
+           Pair each MDP against a resident using transpositions/exchanges.
+        2. Remainder: the unpaired residents form a new homogeneous bracket
+           and are paired using ``_pair_scoregroup``.
+        """
+        all_pairs: List[Tuple[DutchPlayer, DutchPlayer]] = []
+
+        # Sort MDPs by pairing order (highest rank first = lowest PN)
+        mdps_sorted = sorted(mdps, key=lambda p: p.pairing_number)
+        residents_sorted = sorted(residents, key=lambda p: p.pairing_number)
+
+        m1 = min(len(mdps_sorted), len(residents_sorted))
+        if m1 == 0:
+            # No MDPs can be paired — all go to remainder
+            all_remainder = mdps_sorted + residents_sorted
+            all_remainder.sort(key=lambda p: (-p.score, p.pairing_number))
+            return self._pair_scoregroup(all_remainder)
+
+        s1 = mdps_sorted[:m1]
+        limbo = mdps_sorted[m1:]  # MDPs that can't be paired (double-float)
+        s2 = residents_sorted
+
+        # --- Phase 1: MDP-Pairing ---
+        mdp_pairs, mdp_remainder = self._pair_mdp_phase(s1, s2)
+        all_pairs.extend(mdp_pairs)
+
+        # Unpaired residents after MDP pairing
+        paired_resident_ids = set()
+        for _, r in mdp_pairs:
+            paired_resident_ids.add(r.id)
+        unpaired_residents = [p for p in residents_sorted
+                              if p.id not in paired_resident_ids]
+
+        # --- Phase 2: Remainder (homogeneous pairing of leftover residents) ---
+        if unpaired_residents:
+            rem_pairs, rem_remainder = self._pair_scoregroup(unpaired_residents)
+            all_pairs.extend(rem_pairs)
+        else:
+            rem_remainder = []
+
+        # Final remainder = limbo MDPs + unpaired MDPs + unpaired residents
+        final_remainder = limbo + mdp_remainder + rem_remainder
+        final_remainder.sort(key=lambda p: (-p.score, p.pairing_number))
+
+        return all_pairs, final_remainder
+
+    def _pair_mdp_phase(
+        self,
+        s1: List[DutchPlayer],
+        s2: List[DutchPlayer],
+    ) -> Tuple[List[Tuple[DutchPlayer, DutchPlayer]], List[DutchPlayer]]:
+        """
+        Try to pair MDPs (S1) against residents (S2).
+
+        Uses the same transposition/exchange logic as homogeneous pairing
+        but S1 = MDPs, S2 = all residents.
+        Returns (pairs, unpaired_mdps).
+        """
+        if not s1 or not s2:
+            return [], list(s1)
+
+        # --- Try all transpositions of S2, pick best colour quality ---
+        best_pairs = None
+        best_cv = float("inf")
+        best_quality = float("inf")
+
+        for s2_perm in self._generate_transpositions(s2, len(s1)):
+            result = self._try_pair_s1_s2(s1, s2_perm)
+            if result is not None:
+                cv = self._colour_violations(result)
+                q = self._pairing_quality(result)
+                if cv < best_cv or (cv == best_cv and q < best_quality):
+                    best_cv = cv
+                    best_quality = q
+                    best_pairs = result
+                if cv == 0 and q == 0:
+                    break
+
+        if best_pairs is not None:
+            return best_pairs, []
+
+        # --- Try reducing M1 (pair fewer MDPs) ---
+        for reduce in range(1, len(s1)):
+            fewer_s1 = s1[:len(s1) - reduce]
+            for s2_perm in self._generate_transpositions(s2, len(fewer_s1)):
+                result = self._try_pair_s1_s2(fewer_s1, s2_perm)
+                if result is not None:
+                    unpaired = s1[len(s1) - reduce:]
+                    return result, unpaired
+
+        return [], list(s1)
 
     def _backtrack_match(
         self, players: List[DutchPlayer], relaxed: bool = False,
@@ -788,14 +918,16 @@ class DutchEngine(BasePairingEngine):
             remainder: List[DutchPlayer] = []
 
             for sg in scoregroups:
-                if remainder:
-                    merged = remainder + sg
-                    merged.sort(key=lambda p: (-p.score, p.pairing_number))
-                else:
-                    merged = list(sg)
-
                 sg_score = sg[0].score if sg else 0.0
-                sg_pairs, remainder = self._pair_scoregroup(merged)
+
+                if remainder:
+                    # Heterogeneous bracket: MDPs + residents
+                    sg_pairs, remainder = self._pair_heterogeneous_bracket(
+                        remainder, list(sg)
+                    )
+                else:
+                    sg_pairs, remainder = self._pair_scoregroup(list(sg))
+
                 paired.extend(sg_pairs)
                 self._record_floats(sg_pairs, sg_score)
 
