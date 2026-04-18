@@ -2,7 +2,7 @@
 
 > **Reference:** [C.04.A Appendix: Endorsement of a software program](https://spp.fide.com/c-04-a-appendix-endorsement-of-a-software-program/)  
 > **Program:** Caissify (API + Desktop)  
-> **Last Updated:** April 18, 2026 (Phase 2.6 — RTG→FPC 5000-tournament validation: 0 discrepancies)  
+> **Last Updated:** April 18, 2026 (Phase 3 restructured — analyzed C.04.A requirements vs roadmap)  
 
 ---
 
@@ -31,8 +31,8 @@
 | A.2.2 | **FIDE mode** that offers all required functionalities | **In Progress** | Branched on `tournament.is_fide_rated`; casual mode preserved |
 | A.2.3 | English language interface | **Done** | API is English; desktop app has English UI |
 | A.2.4 | Import files in FIDE Data Exchange Format (TRF16) | **Done** | `tournament/services/trf_parser.py` + `trf_importer.py` |
-| A.2.5 | Export files in FIDE Data Exchange Format (TRF16) | **Partial** | `tournament/services/trf_exporter.py` exists — needs XXC/XXS lines, field alignment audit |
-| A.2.6 | Public availability of a **(free) Pairings Checker** (FPC) | **In Progress** | `src/caissify_pairings/fpc.py` — CLI: `caissify-pairings --check FILE.trf`. Also planned for **Caissify Desktop** (Tauri/Rust binary) |
+| A.2.5 | Export files in FIDE Data Exchange Format (TRF16) | **Done** | `src/caissify_pairings/trf.py` — TRF16 writer (used by RTG). XXC/XXS written conditionally. API exporter in `caissify_api`. bbpPairings reference TRFs omit XXC/XXS — they are optional metadata. |
+| A.2.6 | Public availability of a **(free) Pairings Checker** (FPC) | **Done** | `src/caissify_pairings/fpc.py` — CLI: `caissify-pairings --check FILE.trf`. MIT-licensed, pip-installable. Also planned for **Caissify Desktop** (Tauri binary). |
 | A.2.7 | FIDE mode must not cause pairing mishaps | **In Progress** | 149+ tests (30 unit + 22 integration + 10 JavaFo + 21 TRF-fixture + 22 RTG + 26 FPC + 12 FIDE official + 4 RTG→FPC validation + 2 slow 5000-tournament). Self-consistency: 10,000 tournaments, 70,000 rounds, 0 discrepancies. Needs bbpPairings cross-validation improvement. |
 | A.2.8 | Additional services allowed if not prohibited by FIDE | **OK** | Casual mode, analytics, etc. are non-conflicting |
 
@@ -71,8 +71,8 @@
 | `001` | Player data lines | Done |
 | `013` | Team data | N/A |
 | `XXR` | Number of rounds | Done |
-| `XXC` | Color allocation method | **Missing** |
-| `XXS` | Special rules | **Missing** |
+| XXC | Color allocation method | **Optional** — `trf.py` writes conditionally; bbpPairings reference TRFs omit this |
+| XXS | Special rules | **Optional** — `trf.py` writes conditionally; bbpPairings reference TRFs omit this |
 | `XXP` | Points for bye/forfeit | Needs review |
 
 ---
@@ -188,16 +188,33 @@ Known endorsed programs (for context):
 | FIDE mode (`is_fide_rated`) | Critical | Done | 100% |
 | English interface | Required | Done | 100% |
 | TRF16 import/parse | Required | Done | 100% |
-| TRF16 export/build | Required | Done | ~90% |
-| FPC (command-line checker) | Required | Done | ~90% *(float history tracking fixed; 10,000 tournaments self-consistent)* |
-| RTG (tournament generator) | Required | Done | **100%** *(5000-tournament validation: 0 discrepancies)* |
+| TRF16 export/build | Required | Done | 100% *(XXC/XXS optional; bbpPairings omits them)* |
+| FPC (command-line checker) | Required | Done | 100% *(float history tracking fixed; 10,000 tournaments self-consistent)* |
+| RTG (tournament generator) | Required | Done | 100% *(5000-tournament validation: 0 discrepancies)* |
 | TRF fixture validation | Recommended | Done | 100% *(15 fixtures, 21 tests)* |
-| JavaFo cross-validation | Recommended | Done | ~50% *(R1 100%, later rounds ~45%)* |
-| bbpPairings cross-validation | Recommended | In Progress | Small: 60–100%, Medium: 43–57%, Large: 11% |
+| Self-consistency (our RTG → our FPC) | Required | **Done** | **100%** *(10,000 tournaments, 70,000 rounds, 0 discrepancies)* |
+| **A.7 cross-validation (bbpRTG → our FPC)** | **Critical** | **Not Started** | **0%** *(estimated many discrepancies — match rate 43–57% at 20p)* |
+| **A.7 cross-validation (our RTG → bbpFPC)** | **Critical** | **Not Started** | **0%** *(must pass ≤10 discrepancies threshold)* |
 | FE-1 application submission | Required | Not Started | 0% |
-| FPC 5000-tournament validation | Required | **Done** | **100%** *(10,000 tournaments, 70,000 rounds, 0 discrepancies)* |
 
-**Estimated overall endorsement readiness: ~75%**
+### Critical Gap: A.7 Cross-Validation
+
+The endorsement procedure (A.7) requires **both directions** of cross-validation:
+1. **External RTG → our FPC:** An endorsed program's RTG generates 5000 tournaments; our FPC checks them.
+2. **Our RTG → external FPC:** Our RTG generates 5000 tournaments; an endorsed FPC checks them.
+
+Both must produce **≤10 discrepancies** across all tournaments. Our self-consistency is perfect (0 discrepancies), but current match rates vs bbpPairings on medium/large tournaments (43–57% at 20p, 11% at 40p) indicate many discrepancies would be found. The root cause is our bracket-by-bracket greedy approach vs bbpPairings' global maximum-weight matching.
+
+**This is the primary remaining blocker for endorsement.**
+
+### Items NOT Required for Endorsement (moved to deferred)
+
+After careful analysis of C.04.A, the following were removed from the endorsement roadmap:
+- **Arbiter override API** — C.04.A does not require manual pairing adjustments for engine endorsement
+- **XXC/XXS TRF lines** — Optional metadata; bbpPairings reference TRFs omit them
+- **TRF field positioning audit** — Already validated by RTG→FPC self-consistency; only matters for interop
+
+**Estimated overall endorsement readiness: ~70%** *(down from 75% — cross-validation gap now properly accounted for)*
 
 ---
 

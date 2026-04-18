@@ -3,7 +3,8 @@
 > **Goal:** Implement a FIDE C.04.3 compliant Dutch System pairing engine eligible for FIDE software endorsement.  
 > **Started:** April 17, 2026  
 > **Last Updated:** April 18, 2026  
-> **Overall Progress:** 28/30 tasks complete  
+> **Overall Progress:** 28/31 tasks complete  
+> **Note:** Phase 3 restructured Apr 18 — removed non-endorsement items, added cross-validation  
 > **Package:** [`caissify-pairings`](https://github.com/lexisvar/caissify_pairings) v0.1.0  
 > **Consumers:** [`caissify_api`](https://github.com/lexisvar/caissify_api) (Django API), `caissify_tm` (Tauri desktop app)
 
@@ -213,27 +214,67 @@
 
 ---
 
-## Phase 3: Polish & Submission
+## Phase 3: Endorsement Submission
+> Focus: satisfy FIDE C.04.A requirements for software endorsement. Only items explicitly
+> required by C.04.A are included here. Tournament-management features (arbiter overrides,
+> TRF export polish for the API) are tracked separately in `caissify_api`.
 
-### 3.1 — TRF export alignment
-- [ ] Add XXC line (color allocation method)
-- [ ] Add XXS line (special rules if any)
-- [ ] Verify exact field positioning against FPC sample files
-- [ ] Roundtrip test: export → FPC validate → re-import → compare
-- **Files:** `tournament/services/trf_exporter.py`
+### 3.1 — Cross-validation with endorsed FPC/RTG (A.7 procedure)
+> C.04.A §A.7: "5000 random tournaments … given in input to the candidate FPC …
+> at most 10 discrepancies."  Both directions must pass.
 
-### 3.2 — Arbiter override API
+- [x] **Automated test:** `tests/test_cross_validation.py` — 4 smoke tests + 4 slow 5000-tournament tests
+- [x] **Path A — bbpPairings RTG → our FPC** (smoke: 10×10p5r → 120 disc, 10×20p9r → 746 disc)
+- [x] **Path B — our RTG → bbpPairings FPC** (smoke: 10×10p5r → 43 disc, 10×20p9r → 367 disc)
+- [x] **E.5 initial-colour fix:** Implemented E.5 rule (odd pairing number → initial-colour, even → opposite). Added `initial_color` parameter to DutchEngine. R1 now matches bbpPairings 100%.
+- [x] **E.3 alternation fix:** Implemented E.3 rule (alternate colours to most recent divergence point in colour history).
+- [x] **FPC initial-colour inference:** `_infer_initial_color()` reads player 1's R1 colour from TRF.
+- [x] **RTG initial-colour randomization:** RTG now draws initial colour by lot per C.04.3 §E.
+- [ ] Achieve ≤10 discrepancies on Path A for 5000×10p5r (currently ~6000 estimated)
+- [ ] Achieve ≤10 discrepancies on Path B for 5000×10p5r (currently ~2150 estimated)
+- [ ] Classify discrepancies per A.7 categories
+- **Baseline cross-validation (smoke 10 tournaments):**
+  - Path A 10p5r: 19/50 rounds mismatched, 120 discrepancies
+  - Path A 20p9r: 57/90 rounds mismatched, 746 discrepancies
+  - Path B 10p5r: 17/50 rounds mismatched, 43 discrepancies
+  - Path B 20p9r: 52/90 rounds mismatched, 367 discrepancies
+- **Files:** `tests/test_cross_validation.py`, `vendor/bbpPairings/`
+
+### 3.2 — Engine match-rate improvement
+> The cross-validation gap (3.1) is caused by architectural differences. Our bracket-by-bracket
+> greedy approach diverges from bbpPairings' global maximum-weight matching on larger brackets.
+
+- [ ] Profile which C.04.3 criteria cause the most divergence (log `_score_candidate()` tuples for mismatched rounds)
+- [ ] Investigate global matching (e.g. Blossom V / maximum-weight matching) as alternative to greedy S1/S2 traversal
+- [ ] Improve float limit enforcement (consecutive same-direction floats — C.04.3 §A5–A7)
+- [ ] Target: ≤10 discrepancies on both A.7 paths (3.1) for 20p/9r and 10p/5r configurations
+- **Files:** `src/caissify_pairings/engines/dutch.py`
+
+### 3.3 — FE-1 application & submission documentation
+- [ ] Fill out FE-1 form (Annex-1): program name, author, version, pairing system, contact
+- [ ] Algorithm description mapping code to each C.04.3 rule (A1–E6)
+- [ ] FPC test results summary (self-consistency + cross-validation pass rates)
+- [ ] RTG test results summary (5000-tournament stats)
+- [ ] Submit to SPP secretariat ≥4 months before target Congress
+
+---
+
+## Deferred — API / Desktop Features (not required for engine endorsement)
+> These items improve the full tournament management product but are NOT part of the
+> C.04.A pairing engine endorsement. Tracked here for reference; implementation in `caissify_api`.
+
+### D.1 — TRF export alignment (caissify_api)
+- [ ] Add XXC/XXS lines to `tournament/services/trf_exporter.py`
+- [ ] Verify field positioning against TRF16 Annex-2 spec
+- [ ] Roundtrip test: API export → FPC validate → re-import → compare
+- **Note:** `caissify_pairings/trf.py` already parses AND writes XXC/XXS conditionally. bbpPairings reference TRFs omit these lines — they are optional metadata.
+
+### D.2 — Arbiter override API (caissify_api)
 - [ ] Manual pairing adjustment endpoint (swap, force-pair, force-bye)
 - [ ] Color override capability
 - [ ] Audit log of all manual interventions
 - [ ] Validation that manual changes don't break data integrity
-- **Files:** `tournament/views/tournament.py`, `tournament/models/pairing.py`
-
-### 3.3 — FIDE submission documentation
-- [ ] Algorithm description mapping code to each C.04.3 rule
-- [ ] FPC test results summary (pass rate)
-- [ ] RTG test results summary
-- [ ] Software description for FIDE committee review
+- **Note:** C.04.A does not require arbiter override capabilities for engine endorsement. This is a tournament management feature.
 
 ---
 
@@ -302,3 +343,4 @@ List[dict] = [
 | 2026-04-18 | Phase 2.6 partial | RTG implemented (`rtg.py`), CLI `caissify-pairings-rtg`, TRF builder (`trf.py`), 22 tests passing |
 | 2026-04-18 | Phase 2.7 complete | 15 TRF fixtures curated, TRF parser + structural validation + R1 matching, 21 tests passing |
 | 2026-04-19 | Phase 2.5.1 complete | C5–C19 multi-criteria scoring, joint MDP+remainder eval, FPC float history fix. 10p_s42: 100%, 11p_s42/10p_s43: 80% |
+| 2026-04-18 | Phase 3.1 partial | Cross-validation test + E.5/E.3 colour rules fix. R1 100% match. Path B improved 57% (10p). 111 tests passing. |

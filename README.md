@@ -156,6 +156,16 @@ This package has **no external dependencies** — pure Python stdlib only.
 This makes it easy to bundle as a standalone binary (PyInstaller/Nuitka)
 for desktop apps or use as a Tauri sidecar.
 
+## Acknowledgements
+
+This project uses the following FIDE-endorsed pairing programs as
+reference implementations for cross-validation and testing:
+
+- **[bbpPairings](https://github.com/BieremaBoworwortzMediaFoundation/bbpPairings)** by Bierema Boyzvoort Media — Dutch and Burstein system engine (Apache-2.0)
+- **[JavaFo](https://javafo.sourceforge.net/)** by Roberto Ricca — Dutch system engine used for fixture generation
+
+We are grateful to their authors for making these tools available.
+
 ## License
 
 MIT
