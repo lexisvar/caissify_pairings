@@ -67,6 +67,12 @@ def check_trf(trf_content: str) -> Dict:
     # Build a player-map keyed by starting_number
     player_map: Dict[int, Dict] = {p["starting_number"]: p for p in players}
 
+    # Infer initial-colour from round 1 data (C.04.3 §E).
+    # The player with pairing number 1 (highest-rated) should have received
+    # the initial-colour in round 1.  If we can read their R1 colour, that
+    # tells us what the initial-colour was.
+    initial_color = _infer_initial_color(player_map)
+
     rounds_report: List[Dict] = []
     summary_matched = 0
     summary_mismatched = 0
@@ -90,6 +96,7 @@ def check_trf(trf_content: str) -> Dict:
                 previous_pairings=previous_pairings,
                 round_number=rnd,
                 total_rounds=total_rounds,
+                initial_color=initial_color,
             )
             engine_output = engine.generate_pairings()
         except Exception as exc:
@@ -136,6 +143,29 @@ def check_trf(trf_content: str) -> Dict:
             "total_discrepancies": total_discrepancies,
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# Helpers — infer initial colour
+# ---------------------------------------------------------------------------
+
+def _infer_initial_color(player_map: Dict[int, Dict]) -> str:
+    """
+    Infer the tournament's initial-colour (C.04.3 §E) from round 1 data.
+
+    By E.5, in R1 the player with pairing number 1 (= starting number 1 in TRF)
+    has an odd PN, so they receive the initial-colour.  We simply read their R1
+    colour from the TRF.
+
+    Falls back to "white" if R1 data is unavailable.
+    """
+    # Player with starting_number 1 is the highest-rated → pairing number 1.
+    p1 = player_map.get(1)
+    if p1:
+        r1 = p1.get("results", {}).get(1)
+        if r1 and r1.get("color"):
+            return "white" if r1["color"] == "w" else "black"
+    return "white"
 
 
 # ---------------------------------------------------------------------------

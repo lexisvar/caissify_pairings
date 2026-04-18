@@ -186,6 +186,7 @@ class DutchEngine(BasePairingEngine):
         total_rounds: int,
         bye_value: float = 1.0,
         max_byes_per_player: int = 1,
+        initial_color: str = "white",
         **kwargs,
     ):
         super().__init__(
@@ -197,6 +198,7 @@ class DutchEngine(BasePairingEngine):
         )
         self.bye_value = bye_value
         self.max_byes_per_player = max_byes_per_player
+        self.initial_color = initial_color  # C.04.3 §E: "Initial-colour"
 
         # Build internal DutchPlayer objects and assign pairing numbers
         self._players: List[DutchPlayer] = self._build_players(players)
@@ -359,6 +361,15 @@ class DutchEngine(BasePairingEngine):
         """
         Assign white/black per C.04.3 §E colour allocation rules.
 
+        E.1  Grant both colour preferences (if compatible).
+        E.2  Grant the stronger colour preference.
+             If both are absolute (topscorers), grant the wider colour diff.
+        E.3  Alternate colours to the most recent time one had white
+             and the other had black.
+        E.4  Grant the colour preference of the higher ranked player.
+        E.5  If the higher ranked player has an odd pairing number,
+             give him the initial-colour; otherwise give him the opposite.
+
         Returns (white_player, black_player).
         """
         pref1 = p1.color_preference
@@ -366,55 +377,84 @@ class DutchEngine(BasePairingEngine):
         str1 = p1.preference_strength
         str2 = p2.preference_strength
 
-        # E1 — grant the colour to whoever has a stronger preference
-        if str1 > str2:
-            if pref1 == ColorPref.WHITE:
-                return p1, p2
-            elif pref1 == ColorPref.BLACK:
-                return p2, p1
-        elif str2 > str1:
-            if pref2 == ColorPref.WHITE:
-                return p2, p1
-            elif pref2 == ColorPref.BLACK:
-                return p1, p2
+        # Determine who is "higher ranked" per A.2 (lower pairing number).
+        if p1.pairing_number < p2.pairing_number:
+            higher, lower = p1, p2
+        else:
+            higher, lower = p2, p1
 
-        # Equal preference strength — both want same colour?
-        if pref1 == pref2 and pref1 != ColorPref.NONE:
+        # --- E.1 — Grant both colour preferences (if compatible) ---
+        if pref1 != ColorPref.NONE and pref2 != ColorPref.NONE and pref1 != pref2:
+            # Compatible: each gets what they want.
             if pref1 == ColorPref.WHITE:
+                return p1, p2
+            else:
+                return p2, p1
+
+        # --- E.2 — Grant the stronger colour preference ---
+        if str1 != str2:
+            stronger = p1 if str1 > str2 else p2
+            pref = stronger.color_preference
+            if pref == ColorPref.WHITE:
+                return (stronger, p2 if stronger is p1 else p1)
+            elif pref == ColorPref.BLACK:
+                other = p2 if stronger is p1 else p1
+                return other, stronger
+        elif str1 > 0 and pref1 == pref2:
+            # Both have equal non-zero strength and SAME preference.
+            # E.2 fallback: grant the wider colour difference.
+            if pref1 == ColorPref.WHITE:
+                # Player with more negative diff (played more blacks) gets white.
                 if p1.color_diff < p2.color_diff:
                     return p1, p2
                 elif p2.color_diff < p1.color_diff:
                     return p2, p1
-                else:
-                    return (p1, p2) if p1.pairing_number < p2.pairing_number else (p2, p1)
+                # If equal diff, fall through to E.3.
             else:  # Both want black
                 if p1.color_diff > p2.color_diff:
                     return p2, p1
                 elif p2.color_diff > p1.color_diff:
                     return p1, p2
-                else:
-                    return (p1, p2) if p1.pairing_number < p2.pairing_number else (p2, p1)
+                # If equal diff, fall through to E.3.
 
-        # Compatible preferences
-        if pref1 == ColorPref.WHITE and pref2 != ColorPref.WHITE:
-            return p1, p2
-        if pref2 == ColorPref.WHITE and pref1 != ColorPref.WHITE:
-            return p2, p1
-        if pref1 == ColorPref.BLACK and pref2 != ColorPref.BLACK:
-            return p2, p1
-        if pref2 == ColorPref.BLACK and pref1 != ColorPref.BLACK:
-            return p1, p2
+        # --- E.3 — Alternate colours to the most recent time
+        #           one had white and the other had black ---
+        h1 = p1.color_hist
+        h2 = p2.color_hist
+        min_len = min(len(h1), len(h2))
+        if min_len > 0:
+            # Scan backwards through history
+            for k in range(1, min_len + 1):
+                c1 = h1[-k]
+                c2 = h2[-k]
+                if c1 != c2:
+                    # One had white, the other had black — give the opposite.
+                    if c1 == "white":
+                        # p1 had white → now p1 gets black
+                        return p2, p1
+                    else:
+                        return p1, p2
 
-        # E3 — equalise colour balance
-        if p1.color_diff < p2.color_diff:
-            return p1, p2
-        elif p2.color_diff < p1.color_diff:
-            return p2, p1
+        # --- E.4 — Grant the colour preference of the higher ranked player ---
+        h_pref = higher.color_preference
+        if h_pref == ColorPref.WHITE:
+            return (higher, lower)
+        elif h_pref == ColorPref.BLACK:
+            return (lower, higher)
 
-        # E4 — higher ranked (lower pairing number) gets white
-        if p1.pairing_number < p2.pairing_number:
-            return p1, p2
-        return p2, p1
+        # --- E.5 — Odd pairing number → initial-colour, even → opposite ---
+        if higher.pairing_number % 2 == 1:
+            # Odd: give initial-colour to higher ranked player.
+            if self.initial_color == "white":
+                return higher, lower
+            else:
+                return lower, higher
+        else:
+            # Even: give opposite of initial-colour to higher ranked player.
+            if self.initial_color == "white":
+                return lower, higher
+            else:
+                return higher, lower
 
     # ------------------------------------------------------------------
     # Phase 1.3 — S1/S2 splitting (C.04.3 §C1-C4)

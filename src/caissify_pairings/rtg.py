@@ -151,6 +151,9 @@ def generate_tournament(
         p["starting_number"] = idx
         p["id"] = idx
 
+    # C.04.3 §E: initial-colour determined by lot before round 1
+    initial_color = random.choice(["white", "black"])
+
     previous_pairings: Set[Tuple[int, int]] = set()
 
     # Per-player tracking for TRF output
@@ -168,6 +171,7 @@ def generate_tournament(
             previous_pairings=previous_pairings,
             round_number=rnd,
             total_rounds=num_rounds,
+            initial_color=initial_color,
         )
         pairings = engine.generate_pairings()
 
