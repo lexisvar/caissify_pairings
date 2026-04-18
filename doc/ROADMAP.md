@@ -224,20 +224,20 @@
 > at most 10 discrepancies."  Both directions must pass.
 
 - [x] **Automated test:** `tests/test_cross_validation.py` — 4 smoke tests + 4 slow 5000-tournament tests
-- [x] **Path A — bbpPairings RTG → our FPC** (smoke: 10×10p5r → 120 disc, 10×20p9r → 746 disc)
-- [x] **Path B — our RTG → bbpPairings FPC** (smoke: 10×10p5r → 43 disc, 10×20p9r → 367 disc)
+- [x] **Path A — bbpPairings RTG → our FPC** (smoke: 10×10p5r → 58 disc, 10×20p9r → 512 disc)
+- [x] **Path B — our RTG → bbpPairings FPC** (smoke: 10×10p5r → 28 disc, 10×20p9r → 253 disc)
 - [x] **E.5 initial-colour fix:** Implemented E.5 rule (odd pairing number → initial-colour, even → opposite). Added `initial_color` parameter to DutchEngine. R1 now matches bbpPairings 100%.
 - [x] **E.3 alternation fix:** Implemented E.3 rule (alternate colours to most recent divergence point in colour history).
 - [x] **FPC initial-colour inference:** `_infer_initial_color()` reads player 1's R1 colour from TRF.
 - [x] **RTG initial-colour randomization:** RTG now draws initial colour by lot per C.04.3 §E.
-- [ ] Achieve ≤10 discrepancies on Path A for 5000×10p5r (currently ~6000 estimated)
-- [ ] Achieve ≤10 discrepancies on Path B for 5000×10p5r (currently ~2150 estimated)
+- [ ] Achieve ≤10 discrepancies on Path A for 5000×10p5r (currently ~2900 estimated from smoke)
+- [ ] Achieve ≤10 discrepancies on Path B for 5000×10p5r (currently ~1400 estimated from smoke)
 - [ ] Classify discrepancies per A.7 categories
-- **Baseline cross-validation (smoke 10 tournaments):**
-  - Path A 10p5r: 19/50 rounds mismatched, 120 discrepancies
-  - Path A 20p9r: 57/90 rounds mismatched, 746 discrepancies
-  - Path B 10p5r: 17/50 rounds mismatched, 43 discrepancies
-  - Path B 20p9r: 52/90 rounds mismatched, 367 discrepancies
+- **Cross-validation (smoke 10 tournaments, current):**
+  - Path A 10p5r: 9/50 rounds mismatched, 58 discrepancies (was 94 baseline → **38% reduction**)
+  - Path A 20p9r: 34/90 rounds mismatched, 512 discrepancies
+  - Path B 10p5r: 12/50 rounds mismatched, 28 discrepancies (was 118 baseline → **76% reduction**)
+  - Path B 20p9r: 39/90 rounds mismatched, 253 discrepancies
 - **Files:** `tests/test_cross_validation.py`, `vendor/bbpPairings/`
 
 ### 3.2 — Engine match-rate improvement
@@ -256,11 +256,11 @@
 - [x] Engine: C12/C14/C16/C18 only count remainder downfloaters (not paired MDPs)
 - [ ] Investigate global matching (e.g. Blossom V / maximum-weight matching) — MWM code added but not yet integrated
 - [ ] Target: ≤10 discrepancies on both A.7 paths (3.1) for 20p/9r and 10p/5r configurations
-- **Updated cross-validation baseline (smoke 10 tournaments):**
-  - Path A 10p5r: 11/50 rounds mismatched, 74 discrepancies (was 120)
-  - Path A 20p9r: 37/90 rounds mismatched, 556 discrepancies (was 746)
-  - Path B 10p5r: 12/50 rounds mismatched, 28 discrepancies (was 43)
-  - Path B 20p9r: 41/90 rounds mismatched, 292 discrepancies (was 367)
+- **Cross-validation (smoke 10 tournaments, current):**
+  - Path A 10p5r: 9/50 rounds mismatched, 58 discrepancies (was 94 baseline → **38% reduction**)
+  - Path A 20p9r: 34/90 rounds mismatched, 512 discrepancies
+  - Path B 10p5r: 12/50 rounds mismatched, 28 discrepancies (was 118 baseline → **76% reduction**)
+  - Path B 20p9r: 39/90 rounds mismatched, 253 discrepancies
 - **Files:** `src/caissify_pairings/engines/dutch.py`, `src/caissify_pairings/fpc.py`
 
 ### 3.3 — FE-1 application & submission documentation

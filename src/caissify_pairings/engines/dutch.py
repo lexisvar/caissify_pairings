@@ -804,13 +804,15 @@ class DutchEngine(BasePairingEngine):
         w |= max(0, max_score_int - penalty) << s
         s += SB
 
-        # C18: minimize score-sum of repeat downfloaters (2 ago)
-        penalty = 0
+        # C18: reward pairing repeat downfloaters by score-sum (2 ago).
+        # Pairing a repeat downfloater removes them from the remainder,
+        # reducing the C18 score-sum.  Reward = their score.
+        c18_reward = 0
         if _fb(p1, 2) == FloatDir.DOWN and p1.score > bracket_score:
-            penalty += int(p1.score * 2)
+            c18_reward += int(p1.score * 2)
         if _fb(p2, 2) == FloatDir.DOWN and p2.score > bracket_score:
-            penalty += int(p2.score * 2)
-        w |= max(0, max_score_int * 2 - penalty) << s
+            c18_reward += int(p2.score * 2)
+        w |= c18_reward << s
         s += SB
 
         # C17: minimize opponent-score of repeat upfloaters (prev)
@@ -822,13 +824,15 @@ class DutchEngine(BasePairingEngine):
         w |= max(0, max_score_int - penalty) << s
         s += SB
 
-        # C16: minimize score-sum of repeat downfloaters (prev)
-        penalty = 0
+        # C16: reward pairing repeat downfloaters by score-sum (prev round).
+        # Pairing a repeat downfloater removes them from the remainder,
+        # reducing the C16 score-sum.  Reward = their score.
+        c16_reward = 0
         if _fb(p1, 1) == FloatDir.DOWN and p1.score > bracket_score:
-            penalty += int(p1.score * 2)
+            c16_reward += int(p1.score * 2)
         if _fb(p2, 1) == FloatDir.DOWN and p2.score > bracket_score:
-            penalty += int(p2.score * 2)
-        w |= max(0, max_score_int * 2 - penalty) << s
+            c16_reward += int(p2.score * 2)
+        w |= c16_reward << s
         s += SB
 
         # C15: repeat upfloaters (2 ago)
@@ -839,12 +843,13 @@ class DutchEngine(BasePairingEngine):
         w |= c15 << s
         s += B
 
-        # C14: repeat downfloaters (2 ago)
-        c14 = 2
+        # C14: reward pairing repeat downfloaters (2 rounds ago).
+        # Each paired repeat downfloater reduces the remainder C14 count.
+        c14 = 0
         for p in (p1, p2):
             if _fb(p, 2) == FloatDir.DOWN and p.score > bracket_score:
-                c14 -= 1
-        w |= max(0, c14) << s
+                c14 += 1
+        w |= c14 << s
         s += B
 
         # C13: repeat upfloaters (prev)
@@ -855,12 +860,13 @@ class DutchEngine(BasePairingEngine):
         w |= c13 << s
         s += B
 
-        # C12: repeat downfloaters (prev)
-        c12 = 2
+        # C12: reward pairing repeat downfloaters (prev round).
+        # Each paired repeat downfloater reduces the remainder C12 count.
+        c12 = 0
         for p in (p1, p2):
             if _fb(p, 1) == FloatDir.DOWN and p.score > bracket_score:
-                c12 -= 1
-        w |= max(0, c12) << s
+                c12 += 1
+        w |= c12 << s
         s += B
 
         # == Colour criteria ==
