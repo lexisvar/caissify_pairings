@@ -356,36 +356,105 @@ All tiers are ALWAYS allocated (bit space reserved). Bits are conditionally SET 
 
 ---
 
-## 9. Open Investigation Threads (Phase 3.6+)
+## 9. Phase 3.6 Diagnostic — Root Cause Identified
 
-The two highest-leverage hypotheses remaining, given that even-player
-tournaments are perfect and odd-player counts are stuck at 22-24/50:
+A new diagnostic, `scripts/compare_edge_weights.py`, computes edge
+weights two ways for any divergent case:
 
-### 9.1 Bracket-loop weight composition vs. recompute
+* **OURS** — our engine's `_compute_bracket_edge_weight` (production code)
+* **BBP**  — a faithful Python port of
+  `vendor/bbpPairings/src/swisssystems/dutch.cpp::computeEdgeWeight`
+  (lines 232-482), forced to use the SAME bit widths as ours so any
+  delta is a real value disagreement, not a width disagreement.
 
-bbpPairings computes `baseEdgeWeights` **once per bracket** and then in
-the bracket loop only **adds bits** to that base
-(`addEdgeWeight`/`edgeWeightComputer` at
-`vendor/bbpPairings/src/swisssystems/dutch.cpp` ~line 1055). Our Python
-implementation **recomputes** weights inside the bracket loop by calling
-`_compute_bracket_edge_weight` again with `in_current_bracket=True`,
-overwriting earlier values via `_set_w(gi, gj, w)` (~line 1810).
+It also computes the global matching totals under both weight schemes
+and traces the preliminary MWM output.
 
-These should be equivalent in principle, but any subtle difference in
-which bits are "added" vs "set fresh" could be hiding behind it. Worth
-auditing this specifically.
+### 9.1 Empirical findings on `9p/5r seed 90 round 4`
 
-### 9.2 MDP/opponent finalization in odd brackets
+```
+preliminary MWM unmatched: [P6]    -> byeAssigneeScore = 1.0
+full ours pairing: [(2,9), (3,4), (5,7), (6,8)]   bye=P1
+full bbp pairing:  [(1,8), (2,9), (3,4), (5,7)]   bye=P6
 
-bbpPairings' MDP-resident loop (lines 1107-1255) finalizes one MDP at a
-time, then re-runs the matching with `nextScoreGroupBegin - scoreGroupBegin`
-boost on the chosen opponent (line 1196). Our Phase 2 (MDP opponent
-selection at line ~1927) does this differently. With odd-player counts
-this is exactly where divergences would surface.
+GLOBAL MATCHING TOTALS (using bbp-style widths):
+  sum(ours pairs)  = 1 417 465 526 124 073 623 138 551 808
+  sum(bbp  pairs)  = 1 417 465 526 114 925 684 247 971 840  (Δ = -9.15e15)
+==> Our matching has HIGHER total weight under both encodings.
+```
 
-### 9.3 Confirmed scope
+For every relevant pair, **ours_w == bbp_w exactly** (verified in the
+per-tier breakdown). And our MWM correctly finds the higher-weight
+matching given those weights.
 
-Both threads above only matter for the bracket loop in the **presence of
-MDPs** (odd brackets). Since even-player tournaments are 0-divergent, the
-issue is definitively confined to MDP / bye-assignee handling within the
-bracket loop, not in the global edge-weight encoding.
+### 9.2 The actual root cause
+
+Therefore the remaining odd-player divergences are **not** caused by the
+edge-weight encoding (it agrees with bbp bit-for-bit) and **not** caused
+by an MWM bug (we find the higher-weight matching given the weights).
+
+The cause is **algorithmic**: bbpPairings does NOT run a single global
+MWM. Instead its bracket loop (`dutch.cpp` lines 930-1255) processes
+brackets one at a time and performs **MDP-by-MDP iterative finalization**:
+
+* For each downfloater (MDP) coming into the bracket, add a position-
+  dependent `addend` to its candidate opponent edges (line 1218: the
+  addend starts at `playersByIndex.size()` and increments as opponents
+  are scanned in REVERSE order, so lower-indexed opponents get larger
+  addends).
+* Re-run MWM after each MDP is added.
+* `finalizePair` zeroes out alternative edges, locking the choice.
+
+This sequential greedy-with-MWM-rerun pattern produces locally-optimal
+choices that can have lower TOTAL weight than a single global MWM.
+
+In the seed-90 example, bbp commits to `(1,8)` early in the bracket
+loop because the MDP-finalization sequence biases that decision; the
+"loss" of ~9.15e15 weight relative to `(6,8)` is an artifact of the
+greedy bracket processing, not a deliberate criterion.
+
+### 9.3 Implications for the fix
+
+**The fix is structural, not encoding.** Closing the remaining
+divergences requires replacing our Phase 2 MDP-opponent selection
+(`_pair_iterative_mwm` lines ~1927-2000) with a faithful port of
+bbpPairings' bracket-loop sequence (`dutch.cpp` lines 1107-1255).
+Specifically:
+
+1. Process MDPs one at a time in pairing-number order.
+2. For each MDP, add the position-dependent `addend` to its bracket-
+   resident edges and re-run MWM.
+3. After each MDP is paired, `finalize` the pair (zero alternatives).
+4. After all MDPs are processed, run a final MWM on the remaining
+   bracket residents — this naturally produces the bye player.
+
+This is a self-contained ~150-200 line change in `_pair_iterative_mwm`.
+Risk: it changes the algorithmic backbone of odd-bracket pairing, so
+even-player tournaments must be re-validated to confirm we don't
+regress (they should be unaffected because no MDPs exist).
+
+### 9.4 Confidence and budget
+
+* **Confidence the fix will close odd-player divergences: high.**
+  We have a ground-truth reference (the diagnostic), the cause is
+  identified, and the change is well-localized.
+* **Estimated effort: 1-2 days** for the port + ~1 day for re-testing
+  and tuning corner cases.
+* **Even-player guarantee: preserved.** No MDPs in even brackets
+  means the new code path is never taken.
+
+### 9.5 Diagnostic usage
+
+```bash
+# Check a specific divergent round (seed/round/players known)
+python scripts/compare_edge_weights.py 9 5 90 4
+
+# Drill into a specific score group within that round
+python scripts/compare_edge_weights.py 9 5 90 4 1.0
+```
+
+The diagnostic prints (a) the pair-level divergence summary,
+(b) the preliminary MWM's unmatched player and resulting
+`byeAssigneeScore`, (c) the global matching totals under both weight
+schemes, and (d) per-tier weight breakdowns for every pair where
+OURS and BBP disagree.
