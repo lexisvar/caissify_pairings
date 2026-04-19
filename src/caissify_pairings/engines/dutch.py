@@ -1332,165 +1332,162 @@ class DutchEngine(BasePairingEngine):
         score_group_shifts: Optional[Dict[float, int]] = None,
         score_groups_shift: int = 0,
         score_group_size_bits: int = 8,
+        bye_candidates: Optional[Set[int]] = None,
+        bye_assignee_score: Optional[float] = None,
+        is_single_downfloater_bye_assignee: bool = False,
+        unplayed_game_ranks: Optional[Dict[int, int]] = None,
     ) -> int:
         """
         Compute base edge weight for iterative bracket MWM.
 
-        Modelled on bbpPairings' computeEdgeWeight: detail criteria (color,
-        float C12-C19) are ONLY evaluated for current-bracket pairs
-        (in_current_bracket=True).  Cross-bracket pairs only get
-        bracket-membership bits.
+        Faithfully models bbpPairings' computeEdgeWeight + insertColorBits.
+        Detail criteria (color, float C12-C19) are ONLY evaluated for
+        current-bracket pairs (in_current_bracket=True).
 
         p1 = higher-ranked player, p2 = lower-ranked player.
 
-        Bit layout (MSB → LSB):
+        Bit layout (MSB → LSB), matching bbpPairings exactly:
 
-            valid | current_bracket | current_bracket_scores
-                  | next_bracket | next_bracket_scores
-                  | C6_psd | C10 | C11
-                  | color [×4]
-                  | C12 | C13 | C14 | C15
-                  | C16 | C17 | C18 | C19
-                  | RESERVED (3*B + 1 bits)
+            completion(2b) | TIER1(B) | TIER2(SB) | TIER3(B) | TIER4(SB)
+            | bye(2*B) | c_imb(B) | c_absP(B) | c_compat(B) | c_strong(B)
+            | [C12(B) | C13(B)]  (if rounds_played >= 1)
+            | [C14(B) | C15(B)]  (if rounds_played >= 2)
+            | [C16(SB) | C17(SB)]  (if rounds_played >= 1)
+            | [C18(SB) | C19(SB)]  (if rounds_played >= 2)
+            | RESERVED(3*B + 1)
         """
         if not self._can_pair(p1, p2):
             return 0
 
         B = max(8, n.bit_length() + 3)
         max_score_int = max(1, int(self.total_rounds * 2))
-        # Use scoreGroupsShift for score-valued tiers when available
         SB = score_groups_shift if score_group_shifts is not None else max(16, (n * max_score_int).bit_length() + 3)
 
         pref1, pref2 = p1.color_preference, p2.color_preference
         str1, str2 = p1.preference_strength, p2.preference_strength
+        rounds_played = self.round_number - 1
 
         def _fb(p: DutchPlayer, k: int) -> FloatDir:
             idx = len(p.float_hist) - k
             return p.float_hist[idx] if idx >= 0 else FloatDir.NONE
 
-        # mask: detail criteria only for current-bracket pairs
         mask = in_current_bracket
 
-        # Helper: get score-based bit value matching bbpPairings' encoding
-        # bbpPairings: result |= 1u << scoreGroupShifts[score]
         def _score_bits(score: float) -> int:
             if score_group_shifts is not None and score in score_group_shifts:
                 return 1 << score_group_shifts[score]
-            return int(score * 2) + 1  # fallback
+            return int(score * 2) + 1
+
+        def _repeated_color(p: DutchPlayer) -> Optional[str]:
+            """Trailing streak of >=2 same-color played games, or None."""
+            ch = p.color_hist
+            if len(ch) >= 2 and ch[-1] == ch[-2]:
+                return ch[-1]
+            return None
 
         w = 0
         s = 0
 
-        # === RESERVED bits (lowest priority) ===
-        # 3*B + 1 bits for the iterative exchange/ordering mechanism
+        # === RESERVED bits (3*B + 1) for exchange/ordering mechanism ===
         s += 3 * B + 1
 
-        # === Float criteria C19 → C12 (only for current bracket) ===
-        # Following bbpPairings' encoding closely:
-        #   C12/C14: count previous downfloaters in pair (higher value=better)
-        #     - lower player (p2): always counted if was downfloater
-        #     - higher player (p1): only counted if p1.score <= p2.score
-        #       (same bracket, not MDP)
-        #   C13/C15: 1 if NOT a repeated upfloat, 0 if IS
-        #   C16/C18: sum of downfloater scores (higher=better, saves
-        #     higher-scored players from repeated downfloat)
-        #   C17/C19: higher player's score bit IF NOT repeated upfloat
+        # === Float criteria (conditionally allocated by rounds_played) ===
+        # C18/C19: two rounds back (only if rounds_played >= 2)
+        if rounds_played >= 2:
+            # C19: opponent scores of repeated upfloaters (2 rounds back)
+            if mask:
+                c19 = 0
+                if not (_fb(p2, 2) == FloatDir.UP and p1.score > p2.score):
+                    c19 = _score_bits(p1.score)
+                w |= c19 << s
+            s += SB
 
-        # C19: opponent scores of repeated upfloaters (2 rounds back)
-        if mask:
-            c19 = 0
-            # Set higher player's score IF lower player is NOT a repeated
-            # upfloater (p2 upfloating means p1.score > p2.score)
-            if not (_fb(p2, 2) == FloatDir.UP and p1.score > p2.score):
-                c19 = _score_bits(p1.score)
-            w |= c19 << s
-        s += SB
+            # C18: downfloater scores (2 rounds back)
+            if mask:
+                c18 = 0
+                if _fb(p2, 2) == FloatDir.DOWN:
+                    c18 += _score_bits(p2.score)
+                if _fb(p1, 2) == FloatDir.DOWN:
+                    c18 += _score_bits(p1.score)
+                w |= c18 << s
+            s += SB
 
-        # C18: downfloater scores (2 rounds back)
-        if mask:
-            c18 = 0
-            if _fb(p2, 2) == FloatDir.DOWN:
-                c18 += _score_bits(p2.score)
-            if _fb(p1, 2) == FloatDir.DOWN:
-                c18 += _score_bits(p1.score)
-            w |= c18 << s
-        s += SB
+        # C16/C17: previous round (only if rounds_played >= 1)
+        if rounds_played >= 1:
+            # C17: opponent scores of repeated upfloaters (previous round)
+            if mask:
+                c17 = 0
+                if not (_fb(p2, 1) == FloatDir.UP and p1.score > p2.score):
+                    c17 = _score_bits(p1.score)
+                w |= c17 << s
+            s += SB
 
-        # C17: opponent scores of repeated upfloaters (previous round)
-        if mask:
-            c17 = 0
-            if not (_fb(p2, 1) == FloatDir.UP and p1.score > p2.score):
-                c17 = _score_bits(p1.score)
-            w |= c17 << s
-        s += SB
+            # C16: downfloater scores (previous round)
+            if mask:
+                c16 = 0
+                if _fb(p2, 1) == FloatDir.DOWN:
+                    c16 += _score_bits(p2.score)
+                if _fb(p1, 1) == FloatDir.DOWN:
+                    c16 += _score_bits(p1.score)
+                w |= c16 << s
+            s += SB
 
-        # C16: downfloater scores (previous round)
-        if mask:
-            c16 = 0
-            if _fb(p2, 1) == FloatDir.DOWN:
-                c16 += _score_bits(p2.score)
-            if _fb(p1, 1) == FloatDir.DOWN:
-                c16 += _score_bits(p1.score)
-            w |= c16 << s
-        s += SB
+        # C14/C15: two rounds back (only if rounds_played >= 2)
+        if rounds_played >= 2:
+            # C15: repeated upfloat (2 rounds back)
+            if mask:
+                c15 = 1
+                if _fb(p2, 2) == FloatDir.UP and p1.score > p2.score:
+                    c15 = 0
+                w |= c15 << s
+            s += B
 
-        # C15: repeated upfloat (2 rounds back)
-        if mask:
-            c15 = 1
-            if _fb(p2, 2) == FloatDir.UP and p1.score > p2.score:
-                c15 = 0
-            w |= c15 << s
-        s += B
+            # C14: repeated downfloat count (2 rounds back)
+            if mask:
+                c14 = 0
+                if _fb(p2, 2) == FloatDir.DOWN:
+                    c14 += 1
+                if _fb(p1, 2) == FloatDir.DOWN and p1.score <= p2.score:
+                    c14 += 1
+                w |= c14 << s
+            s += B
 
-        # C14: repeated downfloat count (2 rounds back)
-        if mask:
-            c14 = 0
-            if _fb(p2, 2) == FloatDir.DOWN:
-                c14 += 1
-            if _fb(p1, 2) == FloatDir.DOWN and p1.score <= p2.score:
-                c14 += 1
-            w |= c14 << s
-        s += B
+        # C12/C13: previous round (only if rounds_played >= 1)
+        if rounds_played >= 1:
+            # C13: repeated upfloat (previous round)
+            if mask:
+                c13 = 1
+                if _fb(p2, 1) == FloatDir.UP and p1.score > p2.score:
+                    c13 = 0
+                w |= c13 << s
+            s += B
 
-        # C13: repeated upfloat (previous round)
-        if mask:
-            c13 = 1
-            if _fb(p2, 1) == FloatDir.UP and p1.score > p2.score:
-                c13 = 0
-            w |= c13 << s
-        s += B
+            # C12: repeated downfloat count (previous round)
+            if mask:
+                c12 = 0
+                if _fb(p2, 1) == FloatDir.DOWN:
+                    c12 += 1
+                if _fb(p1, 1) == FloatDir.DOWN and p1.score <= p2.score:
+                    c12 += 1
+                w |= c12 << s
+            s += B
 
-        # C12: repeated downfloat count (previous round)
-        if mask:
-            c12 = 0
-            # Lower-ranked player (p2) was a previous downfloater
-            if _fb(p2, 1) == FloatDir.DOWN:
-                c12 += 1
-            # Higher-ranked player (p1) was a previous downfloater AND
-            # same score group (not MDP — MDP always downfloats, not
-            # controllable per-edge)
-            if _fb(p1, 1) == FloatDir.DOWN and p1.score <= p2.score:
-                c12 += 1
-            w |= c12 << s
-        s += B
+        # === Color criteria (4 levels matching insertColorBits exactly) ===
+        # bbpPairings calls insertColorBits(lowerPlayer, higherPlayer)
+        # so "player" = p2 (lower), "opponent" = p1 (higher)
 
-        # === Color criteria (only for current bracket) ===
-        # 4 levels matching bbpPairings' insertColorBits
-
-        # Strong preference satisfaction
+        # Bit 4 (highest color): c_strong
+        # Penalty when BOTH have >= strong pref, NOT both absolute, same pref
         if mask:
             c_strong = 1
-            if (pref1 != ColorPref.NONE and pref2 != ColorPref.NONE
-                    and pref1 == pref2):
-                if not ((not (str1 >= 2 and not (str1 == 3))
-                         and not (str2 >= 2 and not (str2 == 3)))
-                        or (str1 == 3 and str2 == 3)
-                        or pref1 != pref2):
-                    c_strong = 0
+            if (pref1 == pref2 and pref1 != ColorPref.NONE
+                    and str1 >= 2 and str2 >= 2
+                    and not (str1 == 3 and str2 == 3)):
+                c_strong = 0
             w |= c_strong << s
         s += B
 
-        # Color compatibility
+        # Bit 3: c_compat = colorPreferencesAreCompatible
         if mask:
             c_compat = 1
             if (pref1 != ColorPref.NONE and pref2 != ColorPref.NONE
@@ -1499,16 +1496,29 @@ class DutchEngine(BasePairingEngine):
             w |= c_compat << s
         s += B
 
-        # Absolute color preference
+        # Bit 2: c_absP (absolute color preference with sub-conditions)
         if mask:
             c_absp = 1
-            if (str1 == 3 and str2 == 3 and pref1 == pref2
-                    and not self._is_last_round):
-                c_absp = 0
+            p2_abs = (str2 == 3)
+            p1_abs = (str1 == 3)
+            if p2_abs and p1_abs and pref1 == pref2:
+                p2_imb = abs(p2.color_diff)
+                p1_imb = abs(p1.color_diff)
+                p2_rep = _repeated_color(p2)
+                p1_rep = _repeated_color(p1)
+                if p2_imb == p1_imb:
+                    if not (p2_rep is None or p2_rep != p1_rep):
+                        c_absp = 0
+                else:
+                    lower_rep = p1_rep if p2_imb > p1_imb else p2_rep
+                    inv_pref = ('black' if pref2 == ColorPref.WHITE
+                                else 'white')
+                    if lower_rep is not None and lower_rep == inv_pref:
+                        c_absp = 0
             w |= c_absp << s
         s += B
 
-        # Color imbalance
+        # Bit 1 (lowest color): c_imb (absoluteColorImbalance)
         if mask:
             c_imb = 1
             if (abs(p1.color_diff) >= 2 and abs(p2.color_diff) >= 2
@@ -1517,63 +1527,61 @@ class DutchEngine(BasePairingEngine):
             w |= c_imb << s
         s += B
 
-        # === C11 ===
-        if mask:
-            c11 = 1
-            if (pref1 != ColorPref.NONE and pref2 != ColorPref.NONE
-                    and pref1 == pref2 and min(str1, str2) >= 2):
-                c11 = 0
-            w |= c11 << s
-        s += B
+        # === C9: minimize unplayed games of bye assignee (2*B bits) ===
+        # Only fires when the bye assignee is in the top bracket and is the
+        # sole "downfloater". Among players at byeAssigneeScore, those with
+        # FEWER played games get higher rank → more weight when paired →
+        # less likely to be the unmatched (bye) player.
+        # Width matches our existing layout (2*B); C++ uses 2*scoreGroupSizeBits.
+        if (is_single_downfloater_bye_assignee
+                and unplayed_game_ranks is not None
+                and bye_assignee_score is not None):
+            c9 = 0
+            if p1.score == bye_assignee_score:
+                c9 |= unplayed_game_ranks.get(len(p1.opponents), 0)
+            if p2.score == bye_assignee_score:
+                c9 += unplayed_game_ranks.get(len(p2.opponents), 0)
+            w |= c9 << s
+        s += 2 * B
 
-        # === C10 ===
-        if mask:
-            c10 = 1
-            if (pref1 != ColorPref.NONE and pref2 != ColorPref.NONE
-                    and pref1 == pref2):
-                c10 = 0
-            w |= c10 << s
-        s += B
-
-        # === C6: PSD ===
-        if mask:
-            psd = int(abs(p1.score - p2.score) * 2)
-            c6_val = max(0, max_score_int * 2 - psd)
-            w |= c6_val << s
-        s += SB
-
-        # === Next bracket pair (TIER 3 in bbpPairings) ===
+        # === TIER 3: Next bracket pair ===
         if in_next_bracket:
             w |= 1 << s
         s += B
 
         # === TIER 4: Next bracket scores ===
-        # Prefer pairing higher-scored players from next bracket
         if in_next_bracket:
             w |= _score_bits(p1.score) << s
         s += SB
 
-        # === Current bracket pair (TIER 1 in bbpPairings, highest) ===
+        # === TIER 1: Current bracket pair (highest priority) ===
         if in_current_bracket:
             w |= 1 << s
         s += B
 
         # === TIER 2: Current bracket scores ===
-        # Prefer pairing higher-scored players in current bracket.
-        # This makes MDP-resident pairs higher priority than
-        # resident-resident pairs (MDP has higher score).
         if in_current_bracket:
             w |= _score_bits(p1.score) << s
         s += SB
 
-        # Top bit: valid
-        w |= 1 << s
+        # === Completion (top 2 bits): bye candidacy encoding ===
+        # 3 = both non-bye-candidates (best)
+        # 2 = one non-bye-candidate
+        # 1 = both bye candidates (MWM will prefer to leave one unmatched)
+        if bye_candidates is not None:
+            p1_bye = p1.id in bye_candidates
+            p2_bye = p2.id in bye_candidates
+            completion = 1 + (not p1_bye) + (not p2_bye)
+        else:
+            completion = 3
+        w |= completion << s
 
         return w
 
     def _pair_iterative_mwm(
         self,
         all_players: List[DutchPlayer],
+        bye_candidates: Optional[Set[int]] = None,
     ) -> Tuple[List[Tuple[DutchPlayer, DutchPlayer]], List[DutchPlayer]]:
         """
         Pair using iterative bracket-by-bracket MWM with exchange mechanism.
@@ -1672,6 +1680,101 @@ class DutchEngine(BasePairingEngine):
         score_group_size_bits = max(1, max_score_group_size.bit_length())
 
         # ---------------------------------------------------------------
+        # Preliminary MWM for odd player count: determine byeAssigneeScore
+        # Matches bbpPairings' two-phase approach: lightweight MWM first
+        # to find who naturally gets the bye, then narrow bye_candidates.
+        # Also computes C9 state (isSingleDownfloaterTheByeAssignee +
+        # unplayedGameRanks) used by `_compute_bracket_edge_weight`.
+        # ---------------------------------------------------------------
+        bye_assignee_score: Optional[float] = None
+        is_single_downfloater_bye_assignee: bool = False
+        unplayed_game_ranks: Optional[Dict[int, int]] = None
+        if bye_candidates is not None and n % 2 == 1:
+            top_score = sorted_players[0].score
+            prelim_G = nx.Graph()
+            for vi in range(n):
+                prelim_G.add_node(vi)
+            for vi in range(n):
+                for vj in range(vi + 1, n):
+                    pi, pj = sorted_players[vi], sorted_players[vj]
+                    if not self._can_pair(pi, pj):
+                        continue
+                    # Lightweight weight: bye-eligibility + scoreGroup + top-bracket
+                    pw = 0
+                    pw |= (
+                        1
+                        + (pi.id not in bye_candidates)
+                        + (pj.id not in bye_candidates)
+                    )
+                    pw <<= score_groups_shift
+                    pw |= (
+                        score_group_shifts.get(pi.score, 0)
+                        + score_group_shifts.get(pj.score, 0)
+                    )
+                    pw <<= score_group_size_bits
+                    # bbpPairings sets this bit on the LOWER-scored player
+                    # of the pair (so it's only 1 when BOTH are in the top
+                    # bracket). pj is the lower-scored one in our ordering.
+                    pw |= int(pj.score >= top_score)
+                    prelim_G.add_edge(vi, vj, weight=pw)
+            prelim_m = nx.max_weight_matching(prelim_G, maxcardinality=True)
+            prelim_matched = set()
+            for u, v in prelim_m:
+                prelim_matched.add(u)
+                prelim_matched.add(v)
+            # Find unmatched player (bye assignee)
+            bye_assignee_score = sorted_players[0].score  # fallback
+            for vi in range(n):
+                if vi not in prelim_matched:
+                    bye_assignee_score = sorted_players[vi].score
+                    break
+            # Narrow bye_candidates to those with score <= byeAssigneeScore
+            bye_candidates = {
+                p.id for p in sorted_players
+                if p.id in bye_candidates
+                and p.score <= bye_assignee_score
+            }
+
+            # --- C9: isSingleDownfloaterTheByeAssignee ---
+            # True iff the bye assignee score is at the top bracket AND no
+            # top-bracket player is matched to a non-top-bracket player in
+            # the preliminary MWM. (Mirrors bbpPairings' computeMatching.)
+            if bye_assignee_score >= top_score:
+                is_single_downfloater_bye_assignee = True
+                # Build prelim partner map
+                prelim_partner: Dict[int, int] = {}
+                for u, v in prelim_m:
+                    prelim_partner[u] = v
+                    prelim_partner[v] = u
+                for vi in range(n):
+                    if sorted_players[vi].score < top_score:
+                        break
+                    partner = prelim_partner.get(vi)
+                    # Top-bracket player matched to a non-top-bracket player
+                    # disqualifies the C9 trigger.
+                    if partner is None:
+                        # vi is unmatched (the bye assignee at top score)
+                        continue
+                    if sorted_players[partner].score < top_score:
+                        is_single_downfloater_bye_assignee = False
+                        break
+            else:
+                is_single_downfloater_bye_assignee = False
+
+            # --- C9: unplayedGameRanks ---
+            # Among players whose score == bye_assignee_score, sort by
+            # playedGames DESC and assign ranks 0..k-1. With duplicates,
+            # later assignment overwrites (matches bbpPairings semantics).
+            played_game_counts = sorted(
+                (len(p.opponents) for p in sorted_players
+                 if p.score == bye_assignee_score),
+                reverse=True,
+            )
+            unplayed_game_ranks = {}
+            for rank, played_games in enumerate(played_game_counts):
+                unplayed_game_ranks[played_games] = rank
+
+        # ---------------------------------------------------------------
         # Set initial edge weights (no bracket context)
         # Only for compatible pairs — provides baseline for far-bracket
         # pairs and ensures completability.
@@ -1690,6 +1793,10 @@ class DutchEngine(BasePairingEngine):
                     score_group_shifts=score_group_shifts,
                     score_groups_shift=score_groups_shift,
                     score_group_size_bits=score_group_size_bits,
+                    bye_candidates=bye_candidates,
+                    bye_assignee_score=bye_assignee_score,
+                    is_single_downfloater_bye_assignee=is_single_downfloater_bye_assignee,
+                    unplayed_game_ranks=unplayed_game_ranks,
                 )
                 edge_weights[(i, j)] = w
 
@@ -1756,6 +1863,10 @@ class DutchEngine(BasePairingEngine):
                         score_group_shifts=score_group_shifts,
                         score_groups_shift=score_groups_shift,
                         score_group_size_bits=score_group_size_bits,
+                        bye_candidates=bye_candidates,
+                        bye_assignee_score=bye_assignee_score,
+                        is_single_downfloater_bye_assignee=is_single_downfloater_bye_assignee,
+                        unplayed_game_ranks=unplayed_game_ranks,
                     )
                     base_ew[li].append(w)
 
@@ -1883,10 +1994,11 @@ class DutchEngine(BasePairingEngine):
 
             # -------------------------------------------------------
             # Phase 2: MDP Opponent Selection
-            # For each matched MDP, choose and finalize their opponent.
-            # bbpPairings processes MDPs sequentially: for each MDP,
-            # zero out other unprocessed MDPs' edges to residents so the
-            # MWM only selects this MDP's opponent, then finalizePair().
+            # For each matched MDP, add tiebreaker weights and run MWM
+            # to choose their opponent. Matches bbpPairings' sequential
+            # processing: ALL MDPs' edges remain active in the graph
+            # (no zeroing of other MDPs' edges). The global MWM jointly
+            # optimizes across all remaining MDPs.
             # -------------------------------------------------------
             finalized_mdp_gis: set = set()
             finalized_all_gis: set = set()  # MDPs + their finalized partners
@@ -1898,26 +2010,8 @@ class DutchEngine(BasePairingEngine):
                 if gi in finalized_all_gis:
                     continue
 
-                # Zero out other unprocessed MDPs' edges to residents
-                # so they don't influence MWM for this MDP's pairing.
-                _saved_edges: List[Tuple[int, int, int]] = []
-                for other_li in range(score_group_begin):
-                    if other_li == li:
-                        continue
-                    other_gi = players_by_idx[other_li]
-                    if not matched[other_gi]:
-                        continue
-                    if other_gi in finalized_mdp_gis:
-                        continue
-                    for rli in range(score_group_begin, next_sg_begin):
-                        rgi = players_by_idx[rli]
-                        key = (min(other_gi, rgi), max(other_gi, rgi))
-                        w = edge_weights.get(key, 0)
-                        if w:
-                            _saved_edges.append((other_gi, rgi, w))
-                            _set_w(other_gi, rgi, 0)
-
                 # Add tiebreaker weights preferring higher-ranked residents
+                # (matching bbpPairings' addend = playersByIndex.size())
                 addend = num_local
                 for rli in range(next_sg_begin - 1, score_group_begin - 1, -1):
                     rgi = players_by_idx[rli]
@@ -1931,20 +2025,17 @@ class DutchEngine(BasePairingEngine):
 
                 stable = _run_mwm()
 
-                # Restore zeroed edges — but skip edges to already-finalized
-                # players (_finalize_pair zeroed all their edges; restoring
-                # would let MWM re-pair them in subsequent iterations).
-                for g1, g2, w in _saved_edges:
-                    if g1 not in finalized_all_gis and g2 not in finalized_all_gis:
-                        _set_w(g1, g2, w)
-
-                # Finalize the pairing
+                # Finalize the pairing (only if actually matched)
                 match_gi = stable[gi]
-                matched[match_gi] = True
-                _finalize_pair(gi, match_gi)
-                finalized_mdp_gis.add(gi)
-                finalized_all_gis.add(gi)
-                finalized_all_gis.add(match_gi)
+                if match_gi != gi:
+                    matched[match_gi] = True
+                    _finalize_pair(gi, match_gi)
+                    finalized_mdp_gis.add(gi)
+                    finalized_all_gis.add(gi)
+                    finalized_all_gis.add(match_gi)
+                else:
+                    # MDP couldn't be matched — unmark and push to next bracket
+                    matched[gi] = False
 
             # -------------------------------------------------------
             # Phase 3: Remainder collection
@@ -2227,8 +2318,14 @@ class DutchEngine(BasePairingEngine):
             for li in range(num_local):
                 gi = players_by_idx[li]
                 if li < next_sg_begin and matched[gi]:
-                    # Save the pair
+                    # Save the pair (guard against self-reference)
                     partner_gi = stable[gi]
+                    if partner_gi == gi:
+                        # Self-reference — not actually matched
+                        new_players_by_idx.append(gi)
+                        if li < next_sg_begin:
+                            new_score_group_begin += 1
+                        continue
                     p1 = sorted_players[gi]
                     p2 = sorted_players[partner_gi]
                     if p1.pairing_number < p2.pairing_number:
@@ -2959,10 +3056,25 @@ class DutchEngine(BasePairingEngine):
 
         # --- Step 1: Bye assignment for odd player count ---
         bye_player: Optional[DutchPlayer] = None
-        if len(all_players) % 2 == 1:
+        bye_candidates: Optional[Set[int]] = None
+        odd_count = len(all_players) % 2 == 1
+
+        if odd_count and self.round_number == 1:
+            # Round 1: deterministic bye selection (pre-select)
             bye_player = self._select_bye_player(all_players)
             if bye_player:
                 all_players = [p for p in all_players if p.id != bye_player.id]
+        elif odd_count and self.round_number >= 2:
+            # Rounds >= 2: let MWM decide bye via completion bits.
+            # Pass bye-eligible IDs; preliminary MWM inside
+            # _pair_iterative_mwm will narrow them down.
+            bye_eligible = [
+                p for p in all_players
+                if p.bye_count < self.max_byes_per_player
+            ]
+            if not bye_eligible:
+                bye_eligible = list(all_players)
+            bye_candidates = {p.id for p in bye_eligible}
 
         # --- Step 2: Build paired output ---
         if self.round_number == 1:
@@ -2973,7 +3085,9 @@ class DutchEngine(BasePairingEngine):
                 remainder = [eligible[-1]]
         else:
             # Iterative bracket MWM: process brackets top-down with MWM
-            paired, remainder = self._pair_iterative_mwm(all_players)
+            paired, remainder = self._pair_iterative_mwm(
+                all_players, bye_candidates=bye_candidates
+            )
 
             # Fallback: if MWM leaves multiple unmatched, try backtracking
             if len(remainder) >= 2:

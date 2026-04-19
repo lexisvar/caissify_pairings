@@ -70,14 +70,14 @@ class TestFIDERuleTests:
 
 # (filename, min_match_ratio) — raise thresholds as engine improves
 RTG_FIXTURES = [
-    ("bbp_10p5r_s42.trf", 0.80),
-    ("bbp_10p5r_s43.trf", 0.80),
-    ("bbp_10p5r_s44.trf", 0.60),
-    ("bbp_11p5r_s42.trf", 0.60),
+    ("bbp_10p5r_s42.trf", 1.00),
+    ("bbp_10p5r_s43.trf", 1.00),
+    ("bbp_10p5r_s44.trf", 1.00),
+    ("bbp_11p5r_s42.trf", 0.80),
     ("bbp_11p5r_s43.trf", 0.60),
-    ("bbp_20p7r_s42.trf", 0.40),
-    ("bbp_20p7r_s43.trf", 0.55),
-    ("bbp_40p9r_s42.trf", 0.10),
+    ("bbp_20p7r_s42.trf", 1.00),
+    ("bbp_20p7r_s43.trf", 1.00),
+    ("bbp_40p9r_s42.trf", 1.00),
 ]
 
 
