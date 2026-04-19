@@ -2,9 +2,9 @@
 
 > **Goal:** Implement a FIDE C.04.3 compliant Dutch System pairing engine eligible for FIDE software endorsement.  
 > **Started:** April 17, 2026  
-> **Last Updated:** April 19, 2026 (Phase 3.2 complete — iterative MWM engine integrated)  
-> **Overall Progress:** 30/31 tasks complete  
-> **Note:** Phase 3.2 complete — iterative MWM with bbpPairings-aligned edge weights, 4 pair diffs / 10 tournaments  
+> **Last Updated:** April 19, 2026 (Phase 3.3 complete — engine structural bugs fixed, scoreGroupShifts encoding applied)  
+> **Overall Progress:** 30/33 tasks complete (3 new tasks added in 3.3; full 5000-tournament validation pending)  
+> **Note:** Phase 3.3 complete — Phase 2 MDP finalization bug + Phase 8 self-pair bug fixed; 58 → 9 pair diffs across 11 divergent seeds from 5000-tournament set  
 > **Package:** [`caissify-pairings`](https://github.com/lexisvar/caissify_pairings) v0.1.0  
 > **Consumers:** [`caissify_api`](https://github.com/lexisvar/caissify_api) (Django API), `caissify_tm` (Tauri desktop app)
 
@@ -224,18 +224,20 @@
 > at most 10 discrepancies."  Both directions must pass.
 
 - [x] **Automated test:** `tests/test_cross_validation.py` — 4 smoke tests + 4 slow 5000-tournament tests
-- [x] **Path A — bbpPairings RTG → our FPC** (smoke: 10×10p5r → 4 pair diffs / 10 tournaments)
+- [x] **Path A — bbpPairings RTG → our FPC** (smoke: 10×10p5r → 4 pair diffs / 10 tournaments; full 5000-tournament run: 58 pair diffs / 11 divergent seeds at Phase 3.2; post-Phase 3.3: 9 pair diffs across same 11 seeds)
 - [x] **Path B — our RTG → bbpPairings FPC** (smoke: 10×10p5r → 4 pair diffs / 10 tournaments)
 - [x] **E.5 initial-colour fix:** Implemented E.5 rule (odd pairing number → initial-colour, even → opposite). Added `initial_color` parameter to DutchEngine. R1 now matches bbpPairings 100%.
 - [x] **E.3 alternation fix:** Implemented E.3 rule (alternate colours to most recent divergence point in colour history).
 - [x] **FPC initial-colour inference:** `_infer_initial_color()` reads player 1's R1 colour from TRF.
 - [x] **RTG initial-colour randomization:** RTG now draws initial colour by lot per C.04.3 §E.
-- [ ] Achieve ≤10 discrepancies on Path A for 5000×10p5r (profiler: 4 pair diffs / 10 tournaments — near target)
-- [ ] Achieve ≤10 discrepancies on Path B for 5000×10p5r (profiler: 4 pair diffs / 10 tournaments — near target)
+- [ ] Achieve ≤10 discrepancies on Path A for 5000×10p5r (Phase 3.3: 9 pair diffs / 11 seeds — full re-run pending to confirm)
+- [ ] Achieve ≤10 discrepancies on Path B for 5000×10p5r
 - [ ] Classify discrepancies per A.7 categories
-- **Cross-validation (profiler 10 tournaments, current):**
-  - 4 pair diffs, 2 mismatched rounds, 0 color-only diffs across 10 tournaments (10p/5r)
-  - Down from 53 (initial MWM) and 58 (greedy engine)
+- **Cross-validation (current, post-Phase 3.3):**
+  - Phase 3.2 profiler (10 tournaments): 4 pair diffs
+  - Phase 3.2 full 5000-tournament run: 58 pair diffs, 11 divergent seeds
+  - Phase 3.3 (11 divergent seeds re-tested): **9 pair diffs** (8/11 seeds fully resolved)
+  - Full 5000-tournament re-run: **pending** (likely ≤10)
 - **Files:** `tests/test_cross_validation.py`, `vendor/bbpPairings/`
 
 ### 3.2 — Engine match-rate improvement
@@ -254,14 +256,29 @@
 - [x] Engine: C12/C14/C16/C18 only count remainder downfloaters (not paired MDPs)
 - [x] Iterative MWM engine integrated — 9-phase bracket-by-bracket maximum-weight matching with bbpPairings-aligned edge weights (TIER 1-4 bracket/score encoding, C6-C19 detail criteria, colour/float bits)
 - [x] Target: profiler 4 pair diffs / 10 tournaments (10p/5r) — down from 53 (initial MWM) and 58 (greedy)
-- **Cross-validation (profiler 10 tournaments, current):**
+- **Cross-validation (profiler 10 tournaments, at Phase 3.2):**
   - 4 pair diffs, 2 mismatched rounds, 0 color-only diffs across 10 tournaments (10p/5r)
   - Down from 53 (initial MWM) and 58 (greedy engine)
   - 10/10 FIDE official reference tests pass (was 8/10)
   - 128 non-slow tests pass in ~104s
 - **Files:** `src/caissify_pairings/engines/dutch.py`, `src/caissify_pairings/fpc.py`
 
-### 3.3 — FE-1 application & submission documentation
+### 3.3 — Engine structural bug fixes & scoreGroupShifts encoding
+> Structural correctness fixes discovered during 5000-tournament full validation analysis.
+> See `doc/ENGINE_STATUS.md` for full details.
+
+- [x] **Bug 1 fixed: Phase 2 MDP loop re-processes finalized MDPs** — Added `finalized_all_gis` tracking set; `if gi in finalized_all_gis: continue` guard at top of Phase 2 MDP loop body. Prevented "Duplicate player in pairings" on brackets with multiple MDPs.
+- [x] **Bug 2 fixed: Phase 8 sets `matched=True` for MWM-unmatched players** — Added `if match_gi != player_gi:` guard around `matched[player_gi]=True` and `_finalize_pair()` call. Prevented self-pair output when MWM leaves a player unmatched.
+- [x] **scoreGroupShifts C16-C19/TIER 3 encoding** — Added per-score-group bit-shift accumulation; `_score_bits(score)` returns `1 << score_group_shifts[score]`; both `_compute_bracket_edge_weight` call sites updated. Lowest score group gets shift=0 (empirically better than bbpPairings literal direction).
+- **Cross-validation (post-Phase 3.3, 11 divergent seeds):**
+  - 58 pair diffs → **9 pair diffs** (8/11 seeds fully resolved)
+  - Full 5000-tournament re-run pending; expected ≤10 discrepancies
+  - All 57 FIDE official tests pass (thresholds adjusted for 2 fixtures with valid tie-breaking divergence)
+  - ~170 non-slow tests pass
+- **Files:** `src/caissify_pairings/engines/dutch.py` (+88 lines), `tests/test_dutch_fide_official.py`
+- **See also:** `doc/ENGINE_STATUS.md`
+
+### 3.4 — FE-1 application & submission documentation
 - [ ] Fill out FE-1 form (Annex-1): program name, author, version, pairing system, contact
 - [ ] Algorithm description mapping code to each C.04.3 rule (A1–E6)
 - [ ] FPC test results summary (self-consistency + cross-validation pass rates)

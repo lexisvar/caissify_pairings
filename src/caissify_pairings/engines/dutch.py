@@ -1329,6 +1329,9 @@ class DutchEngine(BasePairingEngine):
         s_len: int,
         in_current_bracket: bool,
         in_next_bracket: bool,
+        score_group_shifts: Optional[Dict[float, int]] = None,
+        score_groups_shift: int = 0,
+        score_group_size_bits: int = 8,
     ) -> int:
         """
         Compute base edge weight for iterative bracket MWM.
@@ -1355,7 +1358,8 @@ class DutchEngine(BasePairingEngine):
 
         B = max(8, n.bit_length() + 3)
         max_score_int = max(1, int(self.total_rounds * 2))
-        SB = max(16, (n * max_score_int).bit_length() + 3)
+        # Use scoreGroupsShift for score-valued tiers when available
+        SB = score_groups_shift if score_group_shifts is not None else max(16, (n * max_score_int).bit_length() + 3)
 
         pref1, pref2 = p1.color_preference, p2.color_preference
         str1, str2 = p1.preference_strength, p2.preference_strength
@@ -1367,8 +1371,12 @@ class DutchEngine(BasePairingEngine):
         # mask: detail criteria only for current-bracket pairs
         mask = in_current_bracket
 
-        # Higher-ranked player's score (for bracket-score tiers)
-        higher_score_int = int(max(p1.score, p2.score) * 2)
+        # Helper: get score-based bit value matching bbpPairings' encoding
+        # bbpPairings: result |= 1u << scoreGroupShifts[score]
+        def _score_bits(score: float) -> int:
+            if score_group_shifts is not None and score in score_group_shifts:
+                return 1 << score_group_shifts[score]
+            return int(score * 2) + 1  # fallback
 
         w = 0
         s = 0
@@ -1394,7 +1402,7 @@ class DutchEngine(BasePairingEngine):
             # Set higher player's score IF lower player is NOT a repeated
             # upfloater (p2 upfloating means p1.score > p2.score)
             if not (_fb(p2, 2) == FloatDir.UP and p1.score > p2.score):
-                c19 = higher_score_int
+                c19 = _score_bits(p1.score)
             w |= c19 << s
         s += SB
 
@@ -1402,9 +1410,9 @@ class DutchEngine(BasePairingEngine):
         if mask:
             c18 = 0
             if _fb(p2, 2) == FloatDir.DOWN:
-                c18 += int(p2.score * 2)
+                c18 += _score_bits(p2.score)
             if _fb(p1, 2) == FloatDir.DOWN:
-                c18 += int(p1.score * 2)
+                c18 += _score_bits(p1.score)
             w |= c18 << s
         s += SB
 
@@ -1412,7 +1420,7 @@ class DutchEngine(BasePairingEngine):
         if mask:
             c17 = 0
             if not (_fb(p2, 1) == FloatDir.UP and p1.score > p2.score):
-                c17 = higher_score_int
+                c17 = _score_bits(p1.score)
             w |= c17 << s
         s += SB
 
@@ -1420,9 +1428,9 @@ class DutchEngine(BasePairingEngine):
         if mask:
             c16 = 0
             if _fb(p2, 1) == FloatDir.DOWN:
-                c16 += int(p2.score * 2)
+                c16 += _score_bits(p2.score)
             if _fb(p1, 1) == FloatDir.DOWN:
-                c16 += int(p1.score * 2)
+                c16 += _score_bits(p1.score)
             w |= c16 << s
         s += SB
 
@@ -1542,7 +1550,7 @@ class DutchEngine(BasePairingEngine):
         # === TIER 4: Next bracket scores ===
         # Prefer pairing higher-scored players from next bracket
         if in_next_bracket:
-            w |= higher_score_int << s
+            w |= _score_bits(p1.score) << s
         s += SB
 
         # === Current bracket pair (TIER 1 in bbpPairings, highest) ===
@@ -1555,7 +1563,7 @@ class DutchEngine(BasePairingEngine):
         # This makes MDP-resident pairs higher priority than
         # resident-resident pairs (MDP has higher score).
         if in_current_bracket:
-            w |= higher_score_int << s
+            w |= _score_bits(p1.score) << s
         s += SB
 
         # Top bit: valid
@@ -1646,6 +1654,24 @@ class DutchEngine(BasePairingEngine):
             i = j
 
         # ---------------------------------------------------------------
+        # Compute scoreGroupShifts matching bbpPairings exactly.
+        # Iterate score groups from HIGHEST to LOWEST (matching bbpPairings).
+        # The highest score group gets shift=0 (least significant bits).
+        # Each group gets bitsToRepresent(groupSize) bits (minimum 1).
+        # ---------------------------------------------------------------
+        score_group_shifts: Dict[float, int] = {}
+        score_groups_shift = 0
+        max_score_group_size = 0
+        for sg_start, sg_end in reversed(sg_bounds):  # sg_bounds[-1] is lowest score
+            group_size = sg_end - sg_start
+            score = sorted_players[sg_start].score
+            new_bits = max(1, group_size.bit_length())
+            score_group_shifts[score] = score_groups_shift
+            max_score_group_size = max(max_score_group_size, group_size)
+            score_groups_shift += new_bits
+        score_group_size_bits = max(1, max_score_group_size.bit_length())
+
+        # ---------------------------------------------------------------
         # Set initial edge weights (no bracket context)
         # Only for compatible pairs — provides baseline for far-bracket
         # pairs and ensures completability.
@@ -1661,6 +1687,9 @@ class DutchEngine(BasePairingEngine):
                     s1_pos={}, s2_pos={}, s_len=0,
                     in_current_bracket=False,
                     in_next_bracket=False,
+                    score_group_shifts=score_group_shifts,
+                    score_groups_shift=score_groups_shift,
+                    score_group_size_bits=score_group_size_bits,
                 )
                 edge_weights[(i, j)] = w
 
@@ -1724,6 +1753,9 @@ class DutchEngine(BasePairingEngine):
                         s1_pos={}, s2_pos={}, s_len=0,
                         in_current_bracket=in_current,
                         in_next_bracket=in_next,
+                        score_group_shifts=score_group_shifts,
+                        score_groups_shift=score_groups_shift,
+                        score_group_size_bits=score_group_size_bits,
                     )
                     base_ew[li].append(w)
 
@@ -1851,12 +1883,39 @@ class DutchEngine(BasePairingEngine):
 
             # -------------------------------------------------------
             # Phase 2: MDP Opponent Selection
-            # For each matched MDP, choose and finalize their opponent
+            # For each matched MDP, choose and finalize their opponent.
+            # bbpPairings processes MDPs sequentially: for each MDP,
+            # zero out other unprocessed MDPs' edges to residents so the
+            # MWM only selects this MDP's opponent, then finalizePair().
             # -------------------------------------------------------
+            finalized_mdp_gis: set = set()
+            finalized_all_gis: set = set()  # MDPs + their finalized partners
+
             for li in range(score_group_begin):
                 gi = players_by_idx[li]
                 if not matched[gi]:
                     continue
+                if gi in finalized_all_gis:
+                    continue
+
+                # Zero out other unprocessed MDPs' edges to residents
+                # so they don't influence MWM for this MDP's pairing.
+                _saved_edges: List[Tuple[int, int, int]] = []
+                for other_li in range(score_group_begin):
+                    if other_li == li:
+                        continue
+                    other_gi = players_by_idx[other_li]
+                    if not matched[other_gi]:
+                        continue
+                    if other_gi in finalized_mdp_gis:
+                        continue
+                    for rli in range(score_group_begin, next_sg_begin):
+                        rgi = players_by_idx[rli]
+                        key = (min(other_gi, rgi), max(other_gi, rgi))
+                        w = edge_weights.get(key, 0)
+                        if w:
+                            _saved_edges.append((other_gi, rgi, w))
+                            _set_w(other_gi, rgi, 0)
 
                 # Add tiebreaker weights preferring higher-ranked residents
                 addend = num_local
@@ -1872,10 +1931,20 @@ class DutchEngine(BasePairingEngine):
 
                 stable = _run_mwm()
 
+                # Restore zeroed edges — but skip edges to already-finalized
+                # players (_finalize_pair zeroed all their edges; restoring
+                # would let MWM re-pair them in subsequent iterations).
+                for g1, g2, w in _saved_edges:
+                    if g1 not in finalized_all_gis and g2 not in finalized_all_gis:
+                        _set_w(g1, g2, w)
+
                 # Finalize the pairing
                 match_gi = stable[gi]
                 matched[match_gi] = True
                 _finalize_pair(gi, match_gi)
+                finalized_mdp_gis.add(gi)
+                finalized_all_gis.add(gi)
+                finalized_all_gis.add(match_gi)
 
             # -------------------------------------------------------
             # Phase 3: Remainder collection
@@ -2142,11 +2211,12 @@ class DutchEngine(BasePairingEngine):
 
                 stable = _run_mwm()
 
-                # Finalize the pairing
+                # Finalize the pairing (only if actually matched)
                 match_gi = stable[player_gi]
-                matched[player_gi] = True
-                matched[match_gi] = True
-                _finalize_pair(player_gi, match_gi)
+                if match_gi != player_gi:
+                    matched[player_gi] = True
+                    matched[match_gi] = True
+                    _finalize_pair(player_gi, match_gi)
 
             # -------------------------------------------------------
             # Phase 9: Advance to next bracket

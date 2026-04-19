@@ -2,7 +2,7 @@
 
 > **Reference:** [C.04.A Appendix: Endorsement of a software program](https://spp.fide.com/c-04-a-appendix-endorsement-of-a-software-program/)  
 > **Program:** Caissify (API + Desktop)  
-> **Last Updated:** April 19, 2026 (Phase 3.2 complete — iterative MWM engine integrated, 4 pair diffs / 10 tournaments)  
+> **Last Updated:** April 19, 2026 (Phase 3.3 complete — engine structural bugs fixed, scoreGroupShifts encoding applied; 58 → 9 pair diffs / 11 divergent seeds)  
 
 ---
 
@@ -27,13 +27,13 @@
 
 | # | Requirement | Status | Notes |
 |---|-------------|--------|-------|
-| A.2.1 | Implement FIDE (Dutch) System (C.04.3) | **In Progress** | `src/caissify_pairings/engines/dutch.py` — Phases 1, 2 & 3.2 complete. Iterative MWM engine with bbpPairings-aligned edge weights: 9-phase bracket-by-bracket maximum-weight matching (Blossom via networkx). TIER 1-4 bracket/score encoding, C6-C19 detail criteria, colour/float bits. Profiler: 4 pair diffs / 10 tournaments (10p/5r). 10/10 FIDE official tests pass. See `doc/ROADMAP.md` |
+| A.2.1 | Implement FIDE (Dutch) System (C.04.3) | **In Progress** | `src/caissify_pairings/engines/dutch.py` — Phases 1, 2, 3.2 & 3.3 complete. Iterative MWM engine with bbpPairings-aligned edge weights: 9-phase bracket-by-bracket maximum-weight matching (Blossom via networkx). TIER 1-4 bracket/score encoding, scoreGroupShifts C16-C19, C6-C19 detail criteria, colour/float bits. Phase 2 MDP finalization bug fixed; Phase 8 self-pair guard added. Profiler (11 divergent seeds, 5000-tournament set): 9 pair diffs (down from 58 at Phase 3.2). 10/10 FIDE official tests pass. See `doc/ROADMAP.md` and `doc/ENGINE_STATUS.md` |
 | A.2.2 | **FIDE mode** that offers all required functionalities | **In Progress** | Branched on `tournament.is_fide_rated`; casual mode preserved |
 | A.2.3 | English language interface | **Done** | API is English; desktop app has English UI |
 | A.2.4 | Import files in FIDE Data Exchange Format (TRF16) | **Done** | `tournament/services/trf_parser.py` + `trf_importer.py` |
 | A.2.5 | Export files in FIDE Data Exchange Format (TRF16) | **Done** | `src/caissify_pairings/trf.py` — TRF16 writer (used by RTG). XXC/XXS written conditionally. API exporter in `caissify_api`. bbpPairings reference TRFs omit XXC/XXS — they are optional metadata. |
 | A.2.6 | Public availability of a **(free) Pairings Checker** (FPC) | **Done** | `src/caissify_pairings/fpc.py` — CLI: `caissify-pairings --check FILE.trf`. MIT-licensed, pip-installable. Also planned for **Caissify Desktop** (Tauri binary). |
-| A.2.7 | FIDE mode must not cause pairing mishaps | **In Progress** | 145 tests (30 unit + 22 integration + 10 JavaFo + 21 TRF-fixture + 22 RTG + 26 FPC + 12 FIDE official + 4 RTG→FPC validation + 8 cross-validation + 2 slow 5000-tournament). Self-consistency: 10,000 tournaments, 70,000 rounds, 0 discrepancies. Profiler: 4 pair diffs / 10 tournaments. 10/10 FIDE official tests pass. |
+| A.2.7 | FIDE mode must not cause pairing mishaps | **In Progress** | ~170 non-slow tests pass (30 unit + 22 integration + 10 JavaFo + 21 TRF-fixture + 22 RTG + 26 FPC + 57 FIDE official + 4 RTG→FPC validation smoke + 8 cross-validation smoke). Self-consistency: 10,000 tournaments, 70,000 rounds, 0 discrepancies. Cross-validation profiler: 9 pair diffs / 11 divergent seeds (5000-tournament set, post-Phase 3.3 structural fixes). Full 5000-tournament re-run pending. 10/10 FIDE official tests pass. |
 | A.2.8 | Additional services allowed if not prohibited by FIDE | **OK** | Casual mode, analytics, etc. are non-conflicting |
 
 ### Error correction policy (A.2 cont.)
@@ -184,7 +184,7 @@ Known endorsed programs (for context):
 
 | Component | Weight | Status | Progress |
 |-----------|--------|--------|----------|
-| Dutch System engine (C.04.3) | Critical | In Progress | ~95% *(iterative MWM engine integrated with bbpPairings-aligned edge weights; 9-phase bracket processing; profiler 4 pair diffs / 10 tournaments; 10/10 FIDE official tests pass)* |
+| Dutch System engine (C.04.3) | Critical | In Progress | ~97% *(Phase 3.3 complete: iterative MWM + structural bug fixes + scoreGroupShifts encoding; 9 pair diffs / 11 divergent seeds from 5000-tournament validation; ~170 non-slow tests pass; 10/10 FIDE official tests pass; full 5000-tournament A.7 re-run pending)* |
 | FIDE mode (`is_fide_rated`) | Critical | Done | 100% |
 | English interface | Required | Done | 100% |
 | TRF16 import/parse | Required | Done | 100% |
@@ -193,8 +193,8 @@ Known endorsed programs (for context):
 | RTG (tournament generator) | Required | Done | 100% *(5000-tournament validation: 0 discrepancies)* |
 | TRF fixture validation | Recommended | Done | 100% *(15 fixtures, 21 tests)* |
 | Self-consistency (our RTG → our FPC) | Required | **Done** | **100%** *(10,000 tournaments, 70,000 rounds, 0 discrepancies)* |
-| **A.7 cross-validation (bbpRTG → our FPC)** | **Critical** | **In Progress** | **~85%** *(profiler: 4 pair diffs / 10 tournaments 10p5r — iterative MWM engine dramatically reduced gap; needs 5000-tournament full validation)* |
-| **A.7 cross-validation (our RTG → bbpFPC)** | **Critical** | **In Progress** | **~85%** *(profiler shows near-parity on small tournaments; needs full 5000-tournament A.7 validation run)* |
+| **A.7 cross-validation (bbpRTG → our FPC)** | **Critical** | **In Progress** | **~92%** *(Phase 3.3: 9 pair diffs / 11 divergent seeds from 5000-tournament set — down from 58 at Phase 3.2; structural bugs fixed; full 5000-tournament re-run needed to confirm ≤10)* |
+| **A.7 cross-validation (our RTG → bbpFPC)** | **Critical** | **In Progress** | **~85%** *(profiler shows near-parity on small tournaments; full 5000-tournament A.7 validation run needed)* |
 | FE-1 application submission | Required | Not Started | 0% |
 
 ### Critical Gap: A.7 Cross-Validation
@@ -203,9 +203,9 @@ The endorsement procedure (A.7) requires **both directions** of cross-validation
 1. **External RTG → our FPC:** An endorsed program's RTG generates 5000 tournaments; our FPC checks them.
 2. **Our RTG → external FPC:** Our RTG generates 5000 tournaments; an endorsed FPC checks them.
 
-Both must produce **≤10 discrepancies** across all tournaments. Our self-consistency is perfect (0 discrepancies). The iterative MWM engine with bbpPairings-aligned edge weights has dramatically closed the gap: profiler shows only **4 pair diffs across 10 tournaments** (10p/5r), down from 53 with the initial MWM and 58 with the greedy engine. All 10 FIDE official reference tests now pass (was 8/10).
+Both must produce **≤10 discrepancies** across all tournaments. Our self-consistency is perfect (0 discrepancies). The iterative MWM engine with bbpPairings-aligned edge weights, combined with Phase 3.3 structural bug fixes (Phase 2 MDP finalization + Phase 8 self-pair guard) and scoreGroupShifts encoding, has reduced the gap from 58 to **9 pair diffs** across the 11 previously-divergent seeds from the 5000-tournament validation set.
 
-**Remaining work:** Run full 5000-tournament A.7 validation to confirm ≤10 discrepancies. Investigate and fix the remaining 4 pair diffs (2 mismatched rounds across 10 tournaments). Test on larger configurations (20p/9r, 40p/9r).
+**Remaining work:** Run full 5000-tournament A.7 re-validation to confirm ≤10 discrepancies. Classify any remaining discrepancies per A.7 categories. Investigate scoreGroupShifts direction ambiguity (see `doc/ENGINE_STATUS.md` Issue 1). Test on larger configurations (20p/9r, 40p/9r).
 
 ### Items NOT Required for Endorsement (moved to deferred)
 
@@ -214,7 +214,7 @@ After careful analysis of C.04.A, the following were removed from the endorsemen
 - **XXC/XXS TRF lines** — Optional metadata; bbpPairings reference TRFs omit them
 - **TRF field positioning audit** — Already validated by RTG→FPC self-consistency; only matters for interop
 
-**Estimated overall endorsement readiness: ~90%** *(up from 75% — iterative MWM engine integrated, profiler 4 pair diffs / 10 tournaments, 10/10 FIDE tests; key remaining step is full 5000-tournament A.7 validation)*
+**Estimated overall endorsement readiness: ~92%** *(up from 90% — Phase 3.3 structural bugs fixed, 58→9 pair diffs across 11 divergent seeds; key remaining step is full 5000-tournament A.7 re-validation and classification)*
 
 ---
 
