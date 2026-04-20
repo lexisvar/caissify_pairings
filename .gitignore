@@ -30,3 +30,9 @@ htmlcov/
 
 # Vendor (compiled reference engines)
 vendor/
+
+# Secrets — never commit these
+.env
+.env.*
+!.env.example
+.pypirc

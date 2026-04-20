@@ -238,6 +238,31 @@ pytest -m "not slow"
 pytest
 ```
 
+## Release process (maintainers)
+
+Secrets live in a git-ignored `.env` at the repo root.
+
+```bash
+cp .env.example .env
+# edit .env and set PYPI_API_TOKEN=pypi-...
+```
+
+Then, after bumping the version in `pyproject.toml`, updating
+`CHANGELOG.md`, committing, and tagging `vX.Y.Z`:
+
+```bash
+scripts/release.sh --dry-run   # build + twine check only
+scripts/release.sh --test      # upload to TestPyPI
+scripts/release.sh             # upload to PyPI
+```
+
+The script builds an sdist + wheel in an isolated venv, runs
+`twine check`, uploads to the chosen index, and then verifies by
+installing the published version in a throwaway venv.
+
+**Never commit `.env`.** Rotate your PyPI token if it has ever been
+shared or exposed.
+
 ## Acknowledgements
 
 Cross-validated against the FIDE-endorsed reference implementations:
