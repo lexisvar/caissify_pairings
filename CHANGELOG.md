@@ -9,6 +9,22 @@ at `1.0.0`.
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-04-19
+
+### Added
+- **Casual Swiss engine** (`system="casual"`): a small, deterministic
+  Swiss-pairing algorithm intended for club nights, online ladders, and
+  tournaments that are not FIDE-rated. Prioritises simplicity and
+  readability over FIDE C.04 conformance.
+  - Round 1: Dutch half-split (seed *i* plays seed *i + n/2*).
+  - Rounds 2+: greedy pairing within score groups with downward floats.
+  - Configurable bye type and per-player bye cap.
+  - Never mutates the caller's player dicts.
+- `CasualSwissEngine` registered in `caissify_pairings.engines`, usable
+  via `generate_pairings(system="casual", …)`.
+- README section comparing the `dutch` and `casual` engines and
+  documenting casual-engine options.
+
 ## [0.1.0] — 2026-04-20
 
 First public release.
@@ -35,5 +51,6 @@ First public release.
   the engine is at 0 discrepancies.
 - Not FIDE-endorsed (endorsement is a separate administrative process).
 
-[Unreleased]: https://github.com/lexisvar/caissify_pairings/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/lexisvar/caissify_pairings/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/lexisvar/caissify_pairings/releases/tag/v0.2.0
 [0.1.0]: https://github.com/lexisvar/caissify_pairings/releases/tag/v0.1.0

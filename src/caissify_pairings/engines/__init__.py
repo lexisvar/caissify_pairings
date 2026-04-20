@@ -13,6 +13,7 @@ from caissify_pairings.base import BasePairingEngine
 # Lazy imports to keep startup fast — engines are imported only when requested.
 _REGISTRY: Dict[str, str] = {
     "dutch": "caissify_pairings.engines.dutch",
+    "casual": "caissify_pairings.engines.casual",
 }
 
 # Populated on first access

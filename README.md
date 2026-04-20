@@ -1,8 +1,17 @@
 # caissify-pairings
 
-Chess tournament pairing engines for Python. Currently implements the
-**FIDE Dutch System (C.04.3)**, cross-validated against the FIDE-endorsed
-reference `bbpPairings` to full **A.7 conformance**.
+Chess tournament pairing engines for Python. Ships two engines:
+
+- **`dutch`** — the **FIDE Dutch System (C.04.3)**, cross-validated
+  against the FIDE-endorsed reference `bbpPairings` to full **A.7
+  conformance**. Use this for rated tournaments.
+- **`casual`** — a small, deterministic Swiss engine for club nights
+  and non-rated events. Simpler, more readable, no FIDE guarantees.
+
+| Engine   | Use case                                    | FIDE A.7 | Complexity |
+|----------|---------------------------------------------|----------|------------|
+| `dutch`  | Rated / official tournaments                | ✅ 0 discrepancies on 70k rounds | High (full C.04.3) |
+| `casual` | Club nights, ladders, non-rated events      | ❌ (not the goal) | Low — ~300 LOC |
 
 ## What you get
 
@@ -130,18 +139,50 @@ caissify-pairings-rtg --players 20 --rounds 9 -n 100 -o ./output/
 
 - **FIDE Dutch System (C.04.3, Feb 2026 spec)** — full A.7 conformance
   against `bbpPairings` on 20p/9r and 10p/5r benchmarks (see above).
+- **Casual Swiss engine** — opt-in via `system="casual"` for club-level
+  events where FIDE conformance is not required.
 - Full TRF16 round-trip parsing/writing.
 - Free Pairings Checker (FPC) for validating existing TRF files.
 - Random Tournament Generator (RTG) for test corpora.
 - Pure-Python, single runtime dependency (`networkx`).
+
+## Casual engine — quick start
+
+```python
+from caissify_pairings import generate_pairings
+
+pairings = generate_pairings(
+    system="casual",
+    players=players,
+    previous_pairings=set(),
+    round_number=1,
+    total_rounds=5,
+    bye_type="F",            # "F" full-point, "H" half-point, "U" PAB, …
+    max_byes_per_player=1,   # each player gets at most one bye
+)
+```
+
+The casual engine follows a very small rulebook:
+
+1. Players sorted by `(-score, -rating, id)`.
+2. Round 1 uses the Dutch half-split (top half vs bottom half).
+3. Later rounds pair greedily within score groups; unmatched players
+   float down one bracket.
+4. Odd fields award one bye to the lowest-scored eligible player.
+5. Colours: perfect alternation > avoid a 3-in-a-row streak > minimise
+   colour imbalance.
+
+It never mutates your input dicts. Use `dutch` if you need FIDE A.7
+behaviour — the two engines share the exact same input/output contract,
+so switching is a one-line change.
 
 ## What does not work yet
 
 Being honest up front — these are known limitations you will hit if your
 use-case is beyond them:
 
-- **Only the Dutch system is implemented.** No Accelerated Dutch, Burstein,
-  Monrad, or round-robin generators yet.
+- **Only Dutch and casual Swiss are implemented.** No Accelerated Dutch,
+  Burstein, Monrad, or round-robin generators yet.
 - **Large-tournament fixture match rates are lower** against pre-recorded
   `bbpPairings` outputs for 40+ players (e.g. 40p/9r reports ~11% exact
   pair agreement on a handful of fixtures). The 5000-tournament A.7
