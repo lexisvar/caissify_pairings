@@ -5,28 +5,48 @@ build-backend = "hatchling.build"
 [project]
 name = "caissify-pairings"
 version = "0.1.0"
-description = "Pluggable chess tournament pairing engines — FIDE Dutch, Swiss, and more."
+description = "Chess tournament pairing engines — FIDE Dutch System (C.04.3), matched against bbpPairings to A.7 conformance."
 readme = "README.md"
 license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = [
     "networkx>=3.0",
 ]
 authors = [
-    { name = "Caissify" },
+    { name = "lexisvar", email = "lexisvar@gmail.com" },
 ]
-keywords = ["chess", "pairing", "fide", "dutch", "swiss", "tournament"]
+keywords = [
+    "chess",
+    "pairing",
+    "pairings",
+    "fide",
+    "dutch",
+    "swiss",
+    "tournament",
+    "arbiter",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
+    "Intended Audience :: Other Audience",
     "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Games/Entertainment :: Board Games",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
 ]
+
+[project.urls]
+Homepage = "https://github.com/lexisvar/caissify_pairings"
+Repository = "https://github.com/lexisvar/caissify_pairings"
+Issues = "https://github.com/lexisvar/caissify_pairings/issues"
+Changelog = "https://github.com/lexisvar/caissify_pairings/blob/main/CHANGELOG.md"
 
 [project.scripts]
 caissify-pairings = "caissify_pairings.__main__:main"
@@ -35,6 +55,23 @@ caissify-pairings-rtg = "caissify_pairings.rtg:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/caissify_pairings"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/caissify_pairings/**",
+    "tests/**",
+    "doc/**",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "pyproject.toml",
+]
+exclude = [
+    "vendor/**",
+    "scripts/**",
+    "**/__pycache__",
+    "**/*.pyc",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
