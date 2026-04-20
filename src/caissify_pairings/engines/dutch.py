@@ -63,6 +63,11 @@ class DutchPlayer:
     color_hist: list = field(default_factory=list)
     float_hist: list = field(default_factory=list)  # List of FloatDir per round
     bye_count: int = 0
+    # Previous unplayed rounds that awarded win-points (forfeit wins "+").
+    # Together with bye_count (PABs) this mirrors bbpPairings' `eligibleForBye`
+    # (common.h:104-120): a player is ineligible for the bye iff they have
+    # any unplayed game awarding >= pointsForWin.
+    forfeit_win_count: int = 0
     opponents: set = field(default_factory=set)  # IDs of previous opponents
 
     # --- Derived properties ---
@@ -136,6 +141,16 @@ class DutchPlayer:
     @property
     def had_bye(self) -> bool:
         return self.bye_count > 0
+
+    @property
+    def is_bye_eligible(self) -> bool:
+        """Mirror bbpPairings' eligibleForBye (common.h:104-120).
+
+        A player is ineligible iff they have ANY previous unplayed round
+        that awarded win-points (PAB or forfeit-win "+"). Half-point byes
+        (0.5 pts) do NOT disqualify.
+        """
+        return self.bye_count == 0 and self.forfeit_win_count == 0
 
     @property
     def last_float(self) -> FloatDir:
@@ -261,6 +276,7 @@ class DutchEngine(BasePairingEngine):
                 float_hist=[FloatDir(f) if isinstance(f, str) else f
                             for f in p.get("float_history", [])],
                 bye_count=p.get("bye_count", 0),
+                forfeit_win_count=p.get("forfeit_win_count", 0),
                 opponents=opponents,
             ))
         return players
@@ -335,10 +351,7 @@ class DutchEngine(BasePairingEngine):
         - Must not have already received a bye (up to max_byes_per_player)
         - Candidate must leave remaining players fully pairable
         """
-        candidates = [
-            p for p in players
-            if p.bye_count < self.max_byes_per_player
-        ]
+        candidates = [p for p in players if p.is_bye_eligible]
         if not candidates:
             candidates = list(players)
 
@@ -354,11 +367,15 @@ class DutchEngine(BasePairingEngine):
                 if match is not None:
                     return candidate
 
-            # No candidate with bye_count < max allows full pairing.
-            # Expand search to ALL players (allow double byes if necessary).
+            # No eligible candidate allows full pairing. Expand search to
+            # ALL players (allow repeat byes / forfeit-win holders if necessary).
             all_sorted = sorted(
                 players,
-                key=lambda p: (p.bye_count, p.score, -p.pairing_number),
+                key=lambda p: (
+                    p.bye_count + p.forfeit_win_count,
+                    p.score,
+                    -p.pairing_number,
+                ),
             )
             for candidate in all_sorted:
                 remaining = [p for p in players if p.id != candidate.id]
@@ -1825,12 +1842,14 @@ class DutchEngine(BasePairingEngine):
             next_sg_begin = len(players_by_idx)  # End of current bracket
 
             # Load next score group into candidates
+            loaded_new_sg_this_iter = False
             if sg_iter < len(sg_bounds):
                 ns_start, ns_end = sg_bounds[sg_iter]
                 bracket_score = sorted_players[ns_start].score
                 for k in range(ns_start, ns_end):
                     players_by_idx.append(k)
                 sg_iter += 1
+                loaded_new_sg_this_iter = True
             else:
                 bracket_score = sorted_players[
                     players_by_idx[-1]
@@ -1905,6 +1924,22 @@ class DutchEngine(BasePairingEngine):
             # Initial MWM for this bracket
             # -------------------------------------------------------
             stable = _run_mwm()
+
+            import os as _os
+            _trace = _os.environ.get("CAISSIFY_TRACE_BRACKET") == "1"
+            if _trace:
+                _ids = [sorted_players[gi].id for gi in players_by_idx]
+                _scores = [sorted_players[gi].score for gi in players_by_idx]
+                print(f"\n=== BRACKET (n={num_local}) score_group_begin={score_group_begin} ids={_ids} scores={_scores}")
+                _show = []
+                for gi in players_by_idx:
+                    p = sorted_players[gi].id
+                    pp = stable[gi]
+                    if pp == gi:
+                        _show.append(f"P{p}=BYE")
+                    else:
+                        _show.append(f"P{p}-P{sorted_players[pp].id}")
+                print(f"  initial MWM: {_show}")
 
             # -------------------------------------------------------
             # Phase 1: MDP Selection
@@ -2086,6 +2121,19 @@ class DutchEngine(BasePairingEngine):
                         pri += 1
 
                 stable = _run_mwm()
+
+                if _trace:
+                    _show = []
+                    for li_ in remainder_local:
+                        gi_ = players_by_idx[li_]
+                        p_ = sorted_players[gi_].id
+                        pp = stable[gi_]
+                        if pp == gi_:
+                            _show.append(f"P{p_}=BYE")
+                        else:
+                            _show.append(f"P{p_}-P{sorted_players[pp].id}")
+                    print(f"  after Phase 4 (exchange weights set): remainder_local={remainder_local} remainder_pairs={remainder_pairs} first_group_end={first_group_end}")
+                    print(f"  after Phase 4 MWM: {_show}")
 
                 # Count exchanges needed
                 exchange_count = 0
@@ -2304,14 +2352,50 @@ class DutchEngine(BasePairingEngine):
 
                 # Finalize the pairing (only if actually matched)
                 match_gi = stable[player_gi]
+                if _trace:
+                    p_ = sorted_players[player_gi].id
+                    pp_ = sorted_players[match_gi].id if match_gi != player_gi else "BYE"
+                    print(f"  Phase 8: P{p_} -> P{pp_}")
                 if match_gi != player_gi:
                     matched[player_gi] = True
                     matched[match_gi] = True
                     _finalize_pair(player_gi, match_gi)
 
+            if _trace:
+                _show = []
+                for gi in players_by_idx:
+                    p = sorted_players[gi].id
+                    if matched[gi]:
+                        pp = stable[gi]
+                        if pp != gi:
+                            _show.append(f"P{p}-P{sorted_players[pp].id}")
+                        else:
+                            _show.append(f"P{p}=SELF")
+                    else:
+                        _show.append(f"P{p}=UNMATCHED")
+                print(f"  end-of-bracket matched state: {_show}")
+
             # -------------------------------------------------------
             # Phase 9: Advance to next bracket
             # -------------------------------------------------------
+            # --- Recompute is_single_downfloater_bye_assignee for NEXT iter.
+            # Mirrors bbpPairings dutch.cpp:1606-1611 (preliminary) and the
+            # secondary disable inside the loop at 1636-1643. This MUST be
+            # done at the END of the iteration: the flag set here is then
+            # consumed by the NEXT iteration's edge weights, using the SG
+            # loaded in THIS iteration (so for iter N it is the iter-N SG's
+            # score, not iter-N+1's). This is a 1-iteration offset relative
+            # to simply "is byeScore >= current bracket's SG score".
+            if (
+                n % 2 == 1
+                and loaded_new_sg_this_iter
+                and bye_assignee_score is not None
+                and bye_assignee_score >= bracket_score
+            ):
+                is_single_downfloater_bye_assignee = True
+            else:
+                is_single_downfloater_bye_assignee = False
+
             new_players_by_idx: List[int] = []
             new_score_group_begin = 0
 
@@ -2337,6 +2421,17 @@ class DutchEngine(BasePairingEngine):
                     new_players_by_idx.append(gi)
                     if li < next_sg_begin:
                         new_score_group_begin += 1
+                    # Secondary disable (bbpPairings dutch.cpp:1636-1643):
+                    # if this player's stable-matching partner has score
+                    # below the SG just loaded, the bye assignee is NOT a
+                    # single downfloater to this bracket -> disable flag.
+                    if is_single_downfloater_bye_assignee:
+                        partner_gi = stable[gi]
+                        if (
+                            partner_gi != gi
+                            and sorted_players[partner_gi].score < bracket_score
+                        ):
+                            is_single_downfloater_bye_assignee = False
 
             # Record floats for ALL pairs from this bracket
             if sg_iter > 0 and sg_iter <= len(sg_bounds):
@@ -3068,10 +3163,7 @@ class DutchEngine(BasePairingEngine):
             # Rounds >= 2: let MWM decide bye via completion bits.
             # Pass bye-eligible IDs; preliminary MWM inside
             # _pair_iterative_mwm will narrow them down.
-            bye_eligible = [
-                p for p in all_players
-                if p.bye_count < self.max_byes_per_player
-            ]
+            bye_eligible = [p for p in all_players if p.is_bye_eligible]
             if not bye_eligible:
                 bye_eligible = list(all_players)
             bye_candidates = {p.id for p in bye_eligible}

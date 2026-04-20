@@ -142,6 +142,7 @@ def generate_tournament(
             "color_hist": [],
             "float_history": [],
             "bye_count": 0,
+            "forfeit_win_count": 0,
         })
 
     # Sort by rating desc to assign pairing numbers
@@ -301,6 +302,7 @@ def _snapshot_players(players: List[Dict]) -> List[Dict]:
             "color_hist": list(p["color_hist"]),
             "float_history": list(p["float_history"]),
             "bye_count": p["bye_count"],
+            "forfeit_win_count": p.get("forfeit_win_count", 0),
         }
         for p in players
     ]

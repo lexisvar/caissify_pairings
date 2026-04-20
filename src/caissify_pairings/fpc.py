@@ -270,11 +270,28 @@ def _build_engine_players(
             # Later rounds — skip players who don't appear in this round
             # (withdrawn or absent)
             continue
+        else:
+            # Player has an entry for target_round. If that entry is an
+            # unplayed "absence" marker (Z = zero-point bye, H = half-point
+            # bye, F = administrative full-point bye, - = forfeit-loss),
+            # the player is absent / withdrawn for this round and must be
+            # excluded from pairing. PAB ("U") and forfeit-win ("+") are
+            # outcomes produced by the pairing algorithm itself, so those
+            # entries indicate the player *did* participate in this round.
+            r = p["results"][target_round]
+            if r.get("opponent") is None and r.get("result") in (
+                "Z", "H", "F", "-"
+            ):
+                continue
 
         score = 0.0
         color_hist: List[str] = []
         float_history: List[str] = []
         bye_count = 0
+        # Forfeit wins "+" are unplayed games that award 1 point. Mirrors
+        # bbpPairings' `eligibleForBye` (common.h:104-120) which treats any
+        # unplayed game with >= pointsForWin as disqualifying.
+        forfeit_win_count = 0
 
         for rnd in range(1, target_round):
             r = p.get("results", {}).get(rnd)
@@ -306,6 +323,7 @@ def _build_engine_players(
                     score += 0.5
                 elif res == "+":
                     score += 1.0
+                    forfeit_win_count += 1
                 # 0, -, L → 0
 
                 # Compute float direction.
@@ -338,6 +356,7 @@ def _build_engine_players(
             "color_hist": color_hist,
             "float_history": float_history,
             "bye_count": bye_count,
+            "forfeit_win_count": forfeit_win_count,
         })
 
     return engine_players
