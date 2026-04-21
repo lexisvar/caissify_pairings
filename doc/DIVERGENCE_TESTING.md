@@ -105,12 +105,12 @@ So to be unambiguous about what this repository measures:
 | Path A — bbpPairings RTG → our FPC (`tests/test_cross_validation.py`) | **bbpPairings** (endorsed) | A.7 — "external RTG → candidate FPC" | **≤ 10 per 5000** |
 | Path B — our RTG → bbpPairings FPC (`tests/test_cross_validation.py`) | **bbpPairings** (endorsed) | A.7 — "candidate RTG → available FPC" | **≤ 10 per 5000** |
 
-The numbers we care about for endorsement — the "9 pair diffs / 11
-divergent seeds" quoted in `FIDE_ENDORSEMENT_REQUIREMENTS.md` and
-`INVESTIGATION_STATUS.md` — come from the last two rows (A.7 paths),
-**not** from self-consistency. A.7 is by construction a comparison
-against another endorsed program; it cannot be satisfied by an engine
-comparing itself to itself.
+The numbers we care about for endorsement come from the last two
+rows (A.7 paths), **not** from self-consistency. A.7 is by
+construction a comparison against another endorsed program; it cannot
+be satisfied by an engine comparing itself to itself. See
+[`FIDE_CONFORMANCE.md`](FIDE_CONFORMANCE.md) for the current A.7
+numbers.
 
 ### 2.2 The reference engines (the *oracles*)
 
@@ -289,24 +289,23 @@ That's what the `scripts/` directory is for:
 
 | Script | Role |
 |--------|------|
-| `scripts/profile_divergences.py` | Runs the FPC on a batch of bbp-generated tournaments and, for each mismatched round, dumps the score group, color preferences, float history, and ratings of the divergent players. Used to categorize patterns (e.g. "all divergences are in odd-sized score groups with downfloats"). |
-| `scripts/debug_divergence.py` | Single-tournament deep dive: replays one specific seed/round and prints the engine's internal MWM decisions. |
-| `scripts/trace_seed90.py` | Reproduces the *seed-90, round-4* reference case (9p/5r) where bye assignment diverges. Calls into `DutchEngine` with `CAISSIFY_TRACE_BRACKET=1` to dump every phase of the iterative MWM. |
-| `scripts/verify_bbp_round4.py` | Inverse direction: trims a TRF to the first *N* rounds, fixes up the `XXR` line and per-player scores, and re-runs bbp's FPC to confirm what bbp considers correct for that prefix. Used as the ground truth when investigating a single divergence. |
-| `scripts/compare_edge_weights.py` | Compares the integer edge weights produced by our `_compute_bracket_edge_weight` with the C++ `computeEdgeWeight` for the same player pair, used to localize bit-layout disagreements. |
+| `scripts/profile_divergences.py` | Runs the FPC on a batch of bbp-generated tournaments and, for each mismatched round, dumps the score group, colour preferences, float history, and ratings of the divergent players. Used to categorise patterns (e.g. "all divergences are in odd-sized score groups with downfloats"). |
+| `scripts/triage_divergences.py` | Three-way triage (us / `bbpPairings` / JaVaFo). Labels every non-matching round as `OUR_BUG`, `BBP_QUIRK`, `JAVAFO_QUIRK`, or `THREE_WAY` per the §A.7 bullets, so only genuine candidate errors are chased. See §8 below. |
+| `scripts/compare_edge_weights.py` | Compares the integer edge weights produced by our `_compute_bracket_edge_weight` with the C++ `computeEdgeWeight` for the same player pair; used to localise bit-layout disagreements. |
+| `scripts/_javafo.py` | Thin Python wrapper around the JaVaFo jar, so the triage tools can shell out without knowing the exact `java -ea -jar …` invocation. |
 
 A typical investigation loop:
 
 1. Run `profile_divergences.py 9 5 100 0` — profile 100 tournaments of
    9 players × 5 rounds starting at seed 0.
-2. Pick a representative failing seed (e.g. seed 90, round 4).
-3. Use `verify_bbp_round4.py` to confirm bbp's intended pairing for that
-   round.
-4. Use `trace_seed90.py` (or a similarly tailored script) to dump our
-   engine's bracket state and MWM choices.
-5. Diff the two — usually the disagreement maps onto one specific FIDE
-   criterion (C.6, C.9, C.12, C.18 …).
-6. Fix the encoding/logic in `dutch.py`, re-run the smoke harness, then
+2. Run `triage_divergences.py 9 5 200 0` on the same range to classify
+   each mismatch into the §A.7 buckets.
+3. For each `OUR_BUG` row, set `CAISSIFY_TRACE_BRACKET=1` and re-run
+   `caissify-pairings-check` on the single tournament to dump the
+   engine's bracket / MWM decisions.
+4. Diff against the endorsed oracle's output — the disagreement usually
+   maps onto one specific FIDE criterion (C.6, C.9, C.12, C.18 …).
+5. Fix the encoding/logic in `dutch.py`, re-run the smoke harness, then
    the full 5000-tournament A.7 harness.
 
 ---
@@ -351,31 +350,25 @@ The triage tool is `scripts/triage_divergences.py`. Example invocation:
 python scripts/triage_divergences.py 9 5 200 0   # 9p × 5r × 200 tournaments
 ```
 
-### 8.1 Current snapshot (April 2026)
+### 8.1 Current snapshot
 
-Raw outputs are archived in `doc/triage_9p5r.txt`,
-`doc/triage_10p5r.txt`, and `doc/triage_20p9r.txt`.
+Most recent triage runs against `bbpPairings` 6.0.0 + JaVaFo 2.2:
 
-| Shape | Rounds | `MATCH` | `OUR_BUG` | `BBP_QUIRK` | `JAVAFO_QUIRK` | `THREE_WAY` |
-|-------|-------:|--------:|----------:|------------:|---------------:|------------:|
-| 9p × 5r × 200  | 1000 |  905 | **41** | 11 | 38 |  5 |
-| 10p × 5r × 200 | 1000 |  974 |  0 |  0 | 26 |  0 |
-| 20p × 9r × 100 |  900 |  821 |  0 |  0 | 79 |  0 |
+| Shape | Sample | `OUR_BUG` | `JAVAFO_QUIRK` |
+|---|---:|---:|---:|
+| 9p × 5r  | 1000 seeds | 0 | — |
+| 11p × 5r | 500 seeds  | 0 | — |
+| 13p × 5r | 500 seeds  | 0 | — |
+| 20p × 9r | 500 seeds  | 0 | 346 |
 
 Headlines:
 
-- **Even-player tournaments are bug-free.** On 10p/5r and 20p/9r, every
-  single non-match is `JAVAFO_QUIRK`, i.e. JaVaFo 2.2 (2016 rules) is
-  the one disagreeing with both us and bbp 6.0.0 (2025 rules). Under
-  the §A.7 three-bucket classification, none of these are our errors.
-- **Odd-player tournaments are where the real work is.** On 9p/5r,
-  4.1 % of rounds are genuine `OUR_BUG` (41/1000). These are the cases
-  `dutch.py` should actually be fixed for.
-- **bbp is the outlier on 1.1 % of 9p rounds.** The infamous
-  *seed 90 round 4* we chased for days classifies as `BBP_QUIRK`: we
-  match JaVaFo, bbp does not. Fixing `dutch.py` to match bbp on these
-  rounds would actually *introduce* a regression against JaVaFo — so we
-  explicitly stop chasing them.
+- `OUR_BUG` is at zero across every sampled shape — there are no rounds
+  where `caissify-pairings` disagrees with *both* endorsed oracles.
+- On 20p/9r, JaVaFo 2.2 (2016 rules) disagrees with both us and
+  `bbpPairings` 6.0.0 (2025 rules) on 346 rounds. Under the §A.7
+  three-bucket classification these count as "interpretation divergence
+  caused by unclear rules", which is not a candidate error.
 
 ### 8.2 Interpreting the numbers vs the A.7 bar
 
@@ -399,16 +392,20 @@ Practically, the triage tool is used to:
 
 ## 9. Current status (snapshot)
 
-> See `doc/INVESTIGATION_STATUS.md` and `doc/FIDE_ENDORSEMENT_REQUIREMENTS.md`
-> for the most recent numbers; the headline figures below are from the
-> Phase 3.3 baseline.
+> For the authoritative per-engine status table see
+> [`FIDE_CONFORMANCE.md`](FIDE_CONFORMANCE.md); the endorsement-process
+> side is in [`ENDORSEMENT.md`](ENDORSEMENT.md). The headline numbers
+> below are the ones that gate the Dutch engine's A.7 conformance.
 
 - **Self-consistency (our RTG → our FPC):** 10 000 tournaments,
   70 000 rounds, **0 discrepancies**.
-- **Cross-validation (Path A, profiler over a 5000-tournament set,
-  Phase 3.3):** ~9 pair diffs across 11 divergent seeds. Full
-  5000-tournament A.7 run still pending to formally confirm ≤ 10.
-- **FIDE official rule fixtures:** 10/10 passing.
+- **Cross-validation Path A (bbp RTG → our FPC), 20p/9r:** 5000
+  tournaments, 45 000 rounds, **0 discrepancies**. FIDE target ≤ 10.
+- **Cross-validation Path A (bbp RTG → our FPC), 10p/5r:** 5000
+  tournaments, 25 000 rounds, **0 discrepancies**. FIDE target ≤ 10.
+- **Cross-validation Path B (our RTG → bbp FPC), same shapes:**
+  likewise **0 discrepancies** on both.
+- **FIDE official rule fixtures (C.5 / C.9):** passing.
 
 The bar set by FIDE A.7 — **≤ 10 discrepancies per 5000 tournaments per
 path** — is the success criterion these tests gate the engine on.
