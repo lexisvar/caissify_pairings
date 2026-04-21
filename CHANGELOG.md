@@ -9,6 +9,38 @@ at `1.0.0`.
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-04-21
+
+### Added
+- **Baku Acceleration** (FIDE Handbook §C.04.5.1) on the Dutch engine,
+  opt-in via `accelerated=True`:
+  - For rounds 1 and 2, the top half of the field (by initial pairing
+    number / rating) receives a +1 *virtual point* added to its score
+    for pairing purposes only. From round 3 onwards no virtual point
+    is added.
+  - For odd player counts, the extra slot goes to the top half
+    (FIDE convention — ceiling division).
+  - Real player scores, color histories, and all other state are
+    untouched; only the pairing-time score is inflated, on a private
+    copy of the player dicts.
+  - Round 1 with acceleration falls through to the standard MWM
+    bracket pairing path so that the artificial scoregroups created
+    by the virtual point are respected (instead of the canonical
+    Dutch top-vs-bottom split).
+- `caissify_pairings.rtg.generate_tournament(..., accelerated=True)`
+  and a matching `--accelerated` flag on the
+  `caissify-pairings-rtg` CLI, for generating accelerated TRF
+  fixtures end-to-end.
+- 14 new unit tests in `tests/test_baku_acceleration.py` covering
+  the helper, R1/R2 separation, R3+ no-op, defaults, input
+  immutability, and a multi-round smoke test.
+
+### Fixed
+- `tests/test_dutch_C5` — the Free Pairings Checker now passes through
+  arbiter pre-assigned byes (`Z`, `H`, `F`) when comparing engine
+  output to a TRF round, so engines are no longer penalised for
+  correctly excluding those players from active pairing.
+
 ## [0.3.0] — 2026-04-19
 
 ### Added
@@ -70,7 +102,8 @@ First public release.
   the engine is at 0 discrepancies.
 - Not FIDE-endorsed (endorsement is a separate administrative process).
 
-[Unreleased]: https://github.com/lexisvar/caissify_pairings/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/lexisvar/caissify_pairings/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/lexisvar/caissify_pairings/releases/tag/v0.4.0
 [0.3.0]: https://github.com/lexisvar/caissify_pairings/releases/tag/v0.3.0
 [0.2.0]: https://github.com/lexisvar/caissify_pairings/releases/tag/v0.2.0
 [0.1.0]: https://github.com/lexisvar/caissify_pairings/releases/tag/v0.1.0

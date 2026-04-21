@@ -186,6 +186,20 @@ class DutchEngine(BasePairingEngine):
     - Float tracking and limits
     - Quality metric optimization
     - Last round relaxation
+
+    Optional acceleration:
+    - **Baku Acceleration** (FIDE Handbook §C.04.5.1) — opt-in via the
+      ``accelerated=True`` constructor flag. For rounds 1 and 2, the
+      top half of players (by initial pairing number, i.e. by rating)
+      receives a +1 *virtual point* added to its score for pairing
+      purposes only. The virtual point spreads the field by forcing
+      top-half-vs-top-half and bottom-half-vs-bottom-half pairings
+      early. From round 3 onwards no virtual point is added.
+
+      The virtual score is applied to a private copy of the player
+      dicts; the caller's player data is never modified, and the
+      engine's output (white_id, black_id, table) is unchanged in
+      shape. Real scores remain whatever the caller passes in.
     """
 
     name = "dutch"
@@ -199,6 +213,14 @@ class DutchEngine(BasePairingEngine):
     # controls the cost of the two-phase joint optimisation.
     MAX_JOINT_EVALS = 200
 
+    # Baku Acceleration — number of rounds during which the virtual
+    # point is awarded to the top half (FIDE C.04.5.1: rounds 1 and 2).
+    BAKU_ACCELERATION_ROUNDS = 2
+
+    # Baku Acceleration — magnitude of the virtual point per accelerated
+    # round (FIDE C.04.5.1: 1.0 = full point).
+    BAKU_VIRTUAL_POINT = 1.0
+
     def __init__(
         self,
         players: List[dict],
@@ -208,6 +230,7 @@ class DutchEngine(BasePairingEngine):
         bye_value: float = 1.0,
         max_byes_per_player: int = 1,
         initial_color: str = "white",
+        accelerated: bool = False,
         **kwargs,
     ):
         super().__init__(
@@ -220,10 +243,56 @@ class DutchEngine(BasePairingEngine):
         self.bye_value = bye_value
         self.max_byes_per_player = max_byes_per_player
         self.initial_color = initial_color  # C.04.3 §E: "Initial-colour"
+        self.accelerated = accelerated
+
+        # Apply Baku virtual scores BEFORE building DutchPlayer objects.
+        # Caller's `players` list is never mutated.
+        if accelerated and round_number <= self.BAKU_ACCELERATION_ROUNDS:
+            players = self._apply_baku_virtual_scores(players)
 
         # Build internal DutchPlayer objects and assign pairing numbers
         self._players: List[DutchPlayer] = self._build_players(players)
         self._player_map: Dict[int, DutchPlayer] = {p.id: p for p in self._players}
+
+    # ------------------------------------------------------------------
+    # Baku Acceleration — FIDE Handbook §C.04.5.1
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def _apply_baku_virtual_scores(cls, players: List[dict]) -> List[dict]:
+        """
+        Return a copy of ``players`` with the Baku virtual point added to
+        the top half (FIDE C.04.5.1).
+
+        Top half is defined by initial pairing number (i.e. by rating
+        order — lowest ``starting_number`` = highest rated). For an odd
+        player count the extra slot goes to the *top* half (ceiling
+        division), matching the FIDE convention.
+
+        Caller's player dicts are never mutated.
+        """
+        if not players:
+            return []
+
+        n = len(players)
+        cutoff = (n + 1) // 2  # ceiling — extra slot to the top half
+
+        # Sort by starting_number (ascending) → first `cutoff` are the top
+        # half. Falling back to id keeps the result deterministic when
+        # starting_number is missing or duplicated.
+        ordered = sorted(
+            players,
+            key=lambda p: (p.get("starting_number", p["id"]), p["id"]),
+        )
+        top_half_ids = {p["id"] for p in ordered[:cutoff]}
+
+        result: List[dict] = []
+        for p in players:
+            p_copy = dict(p)
+            if p_copy["id"] in top_half_ids:
+                p_copy["score"] = p_copy.get("score", 0.0) + cls.BAKU_VIRTUAL_POINT
+            result.append(p_copy)
+        return result
 
     # ------------------------------------------------------------------
     # Phase 1.1 — Initial ordering & data structures (C.04.3 §A1-A3)
@@ -3169,7 +3238,11 @@ class DutchEngine(BasePairingEngine):
             bye_candidates = {p.id for p in bye_eligible}
 
         # --- Step 2: Build paired output ---
-        if self.round_number == 1:
+        # Round 1 normally uses the canonical Dutch top-vs-bottom split.
+        # Under Baku Acceleration, however, the virtual scores create
+        # artificial scoregroups that must be respected, so we fall
+        # through to the standard MWM bracket pairing path instead.
+        if self.round_number == 1 and not self.accelerated:
             eligible = sorted(all_players, key=lambda p: p.pairing_number)
             paired = self._generate_first_round_pairings(eligible)
             remainder: List[DutchPlayer] = []

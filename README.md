@@ -4,7 +4,9 @@ Chess tournament pairing engines for Python. Ships three engines:
 
 - **`dutch`** — the **FIDE Dutch System (C.04.3)**, cross-validated
   against the FIDE-endorsed reference `bbpPairings` to full **A.7
-  conformance**. Use this for rated Swiss tournaments.
+  conformance**. Use this for rated Swiss tournaments. Optional
+  **Baku Acceleration** (FIDE C.04.5.1) via `accelerated=True` for
+  large opens.
 - **`round_robin`** — **FIDE Berger Tables** (FIDE Handbook §C.05).
   Every player meets every other player; supports single and double
   round-robin. Verified to match the published FIDE tables exactly.
@@ -13,9 +15,9 @@ Chess tournament pairing engines for Python. Ships three engines:
 
 | Engine        | Use case                                    | FIDE compliance | Complexity |
 |---------------|---------------------------------------------|-----------------|------------|
-| `dutch`       | Rated Swiss / official tournaments          | ✅ A.7 — 0 discrepancies on 70k rounds | High (full C.04.3) |
-| `round_robin` | Round-robin / Scheveningen / club leagues   | ✅ Berger Tables verified vs FIDE Handbook §C.05 | Low |
-| `casual`      | Club nights, ladders, non-rated Swiss       | ❌ (not the goal) | Low |
+| `dutch`       | Rated Swiss / official tournaments          | A.7 — 0 discrepancies on 70k rounds; Baku C.04.5.1 acceleration available | High (full C.04.3) |
+| `round_robin` | Round-robin / Scheveningen / club leagues   | Berger Tables verified vs FIDE Handbook §C.05 | Low |
+| `casual`      | Club nights, ladders, non-rated Swiss       | (not the goal) | Low |
 
 ## What you get
 
@@ -151,6 +153,46 @@ caissify-pairings-rtg --players 20 --rounds 9 -n 100 -o ./output/
 - Free Pairings Checker (FPC) for validating existing TRF files.
 - Random Tournament Generator (RTG) for test corpora.
 - Pure-Python, single runtime dependency (`networkx`).
+
+## Baku Acceleration — quick start
+
+Baku Acceleration (FIDE Handbook §C.04.5.1) is an opt-in modifier on
+the Dutch engine. For rounds 1 and 2 the top half of the field (by
+initial pairing number / rating) gets a **+1 virtual point** added to
+its score for pairing purposes only. The result: top-half plays
+top-half and bottom-half plays bottom-half early, spreading the
+field — exactly what large opens need.
+
+```python
+from caissify_pairings import generate_pairings
+
+pairings = generate_pairings(
+    system="dutch",
+    players=players,            # any list of player dicts
+    previous_pairings=set(),
+    round_number=1,
+    total_rounds=9,
+    accelerated=True,           # ← opt in to Baku
+)
+```
+
+What you can rely on:
+
+- The virtual point is applied only for rounds 1 and 2; round 3
+  onwards is a normal Dutch pairing on real scores.
+- Real `score`, `color_hist`, etc. are never modified — only the
+  internal pairing-time score is inflated, on a private copy.
+- For odd player counts the extra slot goes to the **top** half
+  (FIDE convention — ceiling division).
+- Output shape is unchanged (`white_id`, `black_id`, `table`, …).
+
+To generate accelerated TRF fixtures end-to-end (e.g. for
+cross-validating against `bbpPairings --accelerated`), the RTG
+exposes the same flag:
+
+```bash
+caissify-pairings-rtg --players 100 --rounds 9 -n 50 --accelerated -o ./baku_fixtures/
+```
 
 ## Round-robin — quick start
 

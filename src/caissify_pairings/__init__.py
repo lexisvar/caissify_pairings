@@ -6,12 +6,17 @@ Public API:
                       total_rounds, **kwargs) -> List[dict]
 
 Engines:
-    "dutch"  — FIDE Dutch System (C.04.3, Feb 2026)
+    "dutch"        — FIDE Dutch System (C.04.3, Feb 2026).
+                     Optional ``accelerated=True`` enables Baku
+                     Acceleration (FIDE C.04.5.1) for rounds 1-2.
+    "round_robin"  — FIDE Berger Tables (FIDE Handbook §C.05).
+                     Optional ``cycles=2`` for double round-robin.
+    "casual"       — Simple Swiss for non-rated tournaments.
 """
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+__version__ = "0.4.0"
 
 from typing import List, Set, Tuple
 

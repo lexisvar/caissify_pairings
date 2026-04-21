@@ -118,12 +118,17 @@ def generate_tournament(
     draw_rate: float = 0.30,
     seed: Optional[int] = None,
     tournament_name: Optional[str] = None,
+    accelerated: bool = False,
 ) -> str:
     """
     Generate a complete simulated tournament and return TRF16 text.
 
     The engine pairs each round using the embedded Dutch engine, then
     results are simulated using the FIDE probability table.
+
+    Set ``accelerated=True`` to enable Baku Acceleration (FIDE
+    C.04.5.1) for rounds 1-2 — useful for cross-validating accelerated
+    pairings against external oracles such as ``bbpPairings``.
     """
     if seed is not None:
         random.seed(seed)
@@ -173,6 +178,7 @@ def generate_tournament(
             round_number=rnd,
             total_rounds=num_rounds,
             initial_color=initial_color,
+            accelerated=accelerated,
         )
         pairings = engine.generate_pairings()
 
@@ -351,6 +357,9 @@ def main() -> None:
     parser.add_argument("--draw-rate", type=float, default=0.30)
     parser.add_argument("--seed", type=int, default=None,
                         help="Random seed for reproducibility")
+    parser.add_argument("--accelerated", action="store_true",
+                        help="Use Baku Acceleration (FIDE C.04.5.1) "
+                             "for rounds 1-2")
 
     args = parser.parse_args()
 
@@ -369,6 +378,7 @@ def main() -> None:
             max_rating=args.max_rating,
             draw_rate=args.draw_rate,
             tournament_name=name,
+            accelerated=args.accelerated,
         )
 
         if args.output_dir:

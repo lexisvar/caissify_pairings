@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "caissify-pairings"
-version = "0.3.0"
-description = "Chess tournament pairing engines for Python — FIDE Dutch System (A.7-conformant), FIDE Berger round-robin, and a simple casual Swiss engine."
+version = "0.4.0"
+description = "Chess tournament pairing engines for Python — FIDE Dutch System (A.7-conformant, with Baku Acceleration), FIDE Berger round-robin, and a simple casual Swiss engine."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
