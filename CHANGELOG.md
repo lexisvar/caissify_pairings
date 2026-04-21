@@ -9,6 +9,26 @@ at `1.0.0`.
 
 ## [Unreleased]
 
+## [0.4.1] — 2026-04-21
+
+### Fixed
+- JSON-over-stdin CLI (`caissify-pairings`) now forwards **every**
+  non-reserved top-level key to the selected engine as a keyword
+  argument. Previously only `bye_value` and `max_byes_per_player`
+  were explicitly forwarded, so `accelerated` (Baku), `cycles`
+  (double round-robin), `initial_color`, `bye_type`, and any other
+  engine kwarg passed via JSON were silently dropped. Reported by
+  downstream tournament-manager integrators.
+- README JSON schema and `__main__.py` docstring now document the
+  generic pass-through so the contract is explicit.
+
+### Added
+- `tests/test_cli.py` — regression tests for the CLI kwarg
+  pass-through covering `accelerated`, `cycles`, `initial_color`,
+  `bye_type`, `bye_value`, and `max_byes_per_player`, plus a small
+  end-to-end check that the CLI produces a full round of pairings
+  for Dutch, accelerated Dutch, and double round-robin.
+
 ## [0.4.0] — 2026-04-21
 
 ### Added
@@ -102,7 +122,8 @@ First public release.
   the engine is at 0 discrepancies.
 - Not FIDE-endorsed (endorsement is a separate administrative process).
 
-[Unreleased]: https://github.com/lexisvar/caissify_pairings/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/lexisvar/caissify_pairings/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/lexisvar/caissify_pairings/releases/tag/v0.4.1
 [0.4.0]: https://github.com/lexisvar/caissify_pairings/releases/tag/v0.4.0
 [0.3.0]: https://github.com/lexisvar/caissify_pairings/releases/tag/v0.3.0
 [0.2.0]: https://github.com/lexisvar/caissify_pairings/releases/tag/v0.2.0

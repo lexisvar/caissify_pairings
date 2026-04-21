@@ -133,6 +133,17 @@ caissify-pairings-rtg --players 20 --rounds 9 -n 100 -o ./output/
 }
 ```
 
+Any JSON key other than the five core fields (`system`, `players`,
+`previous_pairings`, `round_number`, `total_rounds`) is forwarded
+verbatim to the selected engine as a keyword argument. That is how
+you pass engine-specific options from the CLI:
+
+| Engine | Extra keys you can include |
+|---|---|
+| `dutch` | `bye_value`, `max_byes_per_player`, `initial_color`, `accelerated` (Baku, C.04.5.1) |
+| `round_robin` | `cycles` (1 = single, 2 = double), `bye_type` |
+| `casual` | `bye_value`, `max_byes_per_player`, `bye_type` |
+
 ### Output JSON schema
 
 ```json
