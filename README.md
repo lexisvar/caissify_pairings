@@ -45,8 +45,9 @@ Checker pipeline:
 | 5000 × 20-player / 9-round | 45,000 | **0** | ≤ 10 | ✅ PASS |
 | 5000 × 10-player / 5-round | 25,000 | **0** | ≤ 10 | ✅ PASS |
 
-See [`doc/ENGINE_STATUS.md`](doc/ENGINE_STATUS.md) for the full story
-and [`doc/DIVERGENCE_TESTING.md`](doc/DIVERGENCE_TESTING.md) for the
+See [`doc/FIDE_CONFORMANCE.md`](doc/FIDE_CONFORMANCE.md) for
+per-engine status against the FIDE Handbook, and
+[`doc/DIVERGENCE_TESTING.md`](doc/DIVERGENCE_TESTING.md) for the
 methodology.
 
 > **Note.** A.7 conformance is a technical criterion. `caissify-pairings`
