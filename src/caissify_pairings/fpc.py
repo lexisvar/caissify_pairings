@@ -114,6 +114,24 @@ def check_trf(trf_content: str) -> Dict:
 
         engine_pairings = _normalise_engine_output(engine_output)
 
+        # --- 3b. Pass through pre-assigned arbiter byes ---
+        # Z (zero-point), H (half-point) and F (administrative full-point)
+        # byes are decisions made by the arbiter *before* pairing, not by
+        # the engine. The Dutch engine correctly excludes those players
+        # from its matching (see _build_engine_players), so they do not
+        # appear in `engine_output`. For the TRF round to compare cleanly
+        # we re-attach them here — they are part of the round's pairings,
+        # just not engine-decision pairings.
+        pre_assigned = _pre_assigned_byes(player_map, rnd)
+        if pre_assigned:
+            engine_pairings.extend(pre_assigned)
+            engine_pairings.sort(
+                key=lambda p: (
+                    p.get("bye", False),
+                    min(p["white"], p.get("black") or 9999),
+                )
+            )
+
         # --- 4. Compare ---
         discrepancies = _compare(trf_pairings, engine_pairings)
         match = len(discrepancies) == 0
@@ -360,6 +378,30 @@ def _build_engine_players(
         })
 
     return engine_players
+
+
+def _pre_assigned_byes(
+    player_map: Dict[int, Dict], target_round: int,
+) -> List[Dict]:
+    """
+    Return the list of arbiter pre-assigned byes recorded in the TRF
+    for ``target_round`` (Z = zero-point, H = half-point, F = administrative
+    full-point bye).
+
+    These byes are *not* engine decisions — the arbiter records them
+    before pairing and the engine simply skips those players. We re-attach
+    them to the engine's output so the TRF and engine sets compare cleanly.
+    Engine-issued PABs (``U``) and forfeit-wins (``+``) are deliberately
+    *not* included here: those are produced by the engine itself.
+    """
+    byes: List[Dict] = []
+    for sn, p in player_map.items():
+        r = p.get("results", {}).get(target_round)
+        if not r:
+            continue
+        if r.get("opponent") is None and r.get("result") in ("Z", "H", "F"):
+            byes.append({"white": sn, "black": None, "bye": True})
+    return byes
 
 
 def _build_previous_pairings(
