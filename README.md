@@ -1,17 +1,21 @@
 # caissify-pairings
 
-Chess tournament pairing engines for Python. Ships two engines:
+Chess tournament pairing engines for Python. Ships three engines:
 
 - **`dutch`** — the **FIDE Dutch System (C.04.3)**, cross-validated
   against the FIDE-endorsed reference `bbpPairings` to full **A.7
-  conformance**. Use this for rated tournaments.
+  conformance**. Use this for rated Swiss tournaments.
+- **`round_robin`** — **FIDE Berger Tables** (FIDE Handbook §C.05).
+  Every player meets every other player; supports single and double
+  round-robin. Verified to match the published FIDE tables exactly.
 - **`casual`** — a small, deterministic Swiss engine for club nights
   and non-rated events. Simpler, more readable, no FIDE guarantees.
 
-| Engine   | Use case                                    | FIDE A.7 | Complexity |
-|----------|---------------------------------------------|----------|------------|
-| `dutch`  | Rated / official tournaments                | ✅ 0 discrepancies on 70k rounds | High (full C.04.3) |
-| `casual` | Club nights, ladders, non-rated events      | ❌ (not the goal) | Low — ~300 LOC |
+| Engine        | Use case                                    | FIDE compliance | Complexity |
+|---------------|---------------------------------------------|-----------------|------------|
+| `dutch`       | Rated Swiss / official tournaments          | ✅ A.7 — 0 discrepancies on 70k rounds | High (full C.04.3) |
+| `round_robin` | Round-robin / Scheveningen / club leagues   | ✅ Berger Tables verified vs FIDE Handbook §C.05 | Low |
+| `casual`      | Club nights, ladders, non-rated Swiss       | ❌ (not the goal) | Low |
 
 ## What you get
 
@@ -139,12 +143,52 @@ caissify-pairings-rtg --players 20 --rounds 9 -n 100 -o ./output/
 
 - **FIDE Dutch System (C.04.3, Feb 2026 spec)** — full A.7 conformance
   against `bbpPairings` on 20p/9r and 10p/5r benchmarks (see above).
+- **FIDE Berger round-robin** — opt-in via `system="round_robin"`,
+  matches the published FIDE Berger tables exactly.
 - **Casual Swiss engine** — opt-in via `system="casual"` for club-level
   events where FIDE conformance is not required.
 - Full TRF16 round-trip parsing/writing.
 - Free Pairings Checker (FPC) for validating existing TRF files.
 - Random Tournament Generator (RTG) for test corpora.
 - Pure-Python, single runtime dependency (`networkx`).
+
+## Round-robin — quick start
+
+```python
+from caissify_pairings import generate_pairings
+
+# Single round-robin: pair round 1 of an 8-player event.
+pairings = generate_pairings(
+    system="round_robin",
+    players=players,            # any 8 players (list of dicts)
+    previous_pairings=set(),    # ignored — RR is deterministic
+    round_number=1,
+    total_rounds=7,             # n - 1 for n=8
+)
+
+# Double round-robin: 14 rounds, each pair meets twice with reversed colours.
+pairings = generate_pairings(
+    system="round_robin",
+    players=players,
+    previous_pairings=set(),
+    round_number=8,             # first round of cycle 2
+    total_rounds=14,
+    cycles=2,
+)
+```
+
+Need the full schedule up front (e.g. to print all rounds at once)?
+
+```python
+from caissify_pairings.engines.round_robin import berger_schedule
+
+# Returns 7 rounds × (n/2) pairs as (white_pairing_no, black_pairing_no).
+all_rounds = berger_schedule(8)
+```
+
+Pairing numbers are taken from each player's `starting_number`
+(ascending). Odd player counts get one bye per round (each player byes
+exactly once over a single cycle).
 
 ## Casual engine — quick start
 
@@ -181,8 +225,9 @@ so switching is a one-line change.
 Being honest up front — these are known limitations you will hit if your
 use-case is beyond them:
 
-- **Only Dutch and casual Swiss are implemented.** No Accelerated Dutch,
-  Burstein, Monrad, or round-robin generators yet.
+- **Swiss systems other than Dutch are not implemented yet.** No
+  Accelerated Dutch (Baku), Dubov, Burstein, or Monrad generators yet.
+  Baku Acceleration is the next planned addition.
 - **Large-tournament fixture match rates are lower** against pre-recorded
   `bbpPairings` outputs for 40+ players (e.g. 40p/9r reports ~11% exact
   pair agreement on a handful of fixtures). The 5000-tournament A.7

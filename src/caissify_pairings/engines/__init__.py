@@ -14,6 +14,7 @@ from caissify_pairings.base import BasePairingEngine
 _REGISTRY: Dict[str, str] = {
     "dutch": "caissify_pairings.engines.dutch",
     "casual": "caissify_pairings.engines.casual",
+    "round_robin": "caissify_pairings.engines.round_robin",
 }
 
 # Populated on first access

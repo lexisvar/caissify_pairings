@@ -9,6 +9,25 @@ at `1.0.0`.
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-04-19
+
+### Added
+- **Round-robin engine** (`system="round_robin"`) implementing the
+  **FIDE Berger Tables** (FIDE Handbook §C.05) for pairing every player
+  against every other player exactly once.
+  - Algorithm verified to match the published FIDE Berger tables
+    exactly for `n = 4, 6, 8` (and tested for invariants up to
+    `n = 20`).
+  - Odd player counts handled via a phantom player → one bye per round,
+    each player byeing exactly once.
+  - **Double round-robin** support via `cycles=2`: cycle 2 plays the
+    same schedule with every pair's colours reversed.
+  - Configurable bye type (`bye_type="U"` by default — Pairing-Allocated
+    Bye).
+- Public helpers `berger_round(n, round_number)` and
+  `berger_schedule(n)` exposed from `caissify_pairings.engines.round_robin`
+  for callers that want the full schedule up front.
+
 ## [0.2.0] — 2026-04-19
 
 ### Added
@@ -51,6 +70,7 @@ First public release.
   the engine is at 0 discrepancies.
 - Not FIDE-endorsed (endorsement is a separate administrative process).
 
-[Unreleased]: https://github.com/lexisvar/caissify_pairings/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/lexisvar/caissify_pairings/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/lexisvar/caissify_pairings/releases/tag/v0.3.0
 [0.2.0]: https://github.com/lexisvar/caissify_pairings/releases/tag/v0.2.0
 [0.1.0]: https://github.com/lexisvar/caissify_pairings/releases/tag/v0.1.0
