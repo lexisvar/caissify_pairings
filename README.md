@@ -36,7 +36,7 @@ software using the **A.7 test**: a program is expected to produce pairings
 that match an already-endorsed program on at least **4990 of 5000** random
 tournaments (≤ 10 discrepancies).
 
-Measured against [`bbpPairings`](https://github.com/BieremaBoyzvoortMediaFoundation/bbpPairings)
+Measured against [`bbpPairings`](https://github.com/BieremaBoyzProgramming/bbpPairings)
 (FIDE-endorsed, C++) using our Random Tournament Generator + Free Pairings
 Checker pipeline:
 
@@ -186,9 +186,12 @@ What you can rely on:
   (FIDE convention — ceiling division).
 - Output shape is unchanged (`white_id`, `black_id`, `table`, …).
 
-To generate accelerated TRF fixtures end-to-end (e.g. for
-cross-validating against `bbpPairings --accelerated`), the RTG
-exposes the same flag:
+To generate accelerated TRF fixtures end-to-end the RTG exposes the
+same flag. Cross-validation against `bbpPairings` itself is done via
+the TRF `XXA` tag — bbp has no `--accelerated` command-line flag;
+acceleration is configured per-round in the TRF file — so this is
+currently an internal-consistency tool, not yet a full A.7 run for
+the Baku configuration.
 
 ```bash
 caissify-pairings-rtg --players 100 --rounds 9 -n 50 --accelerated -o ./baku_fixtures/
@@ -267,18 +270,22 @@ so switching is a one-line change.
 Being honest up front — these are known limitations you will hit if your
 use-case is beyond them:
 
-- **Swiss systems other than Dutch are not implemented yet.** No
-  Accelerated Dutch (Baku), Dubov, Burstein, or Monrad generators yet.
-  Baku Acceleration is the next planned addition.
+- **Swiss systems other than Dutch are not implemented yet.** No Dubov,
+  Burstein, or Monrad generators — those are on the roadmap.
 - **Large-tournament fixture match rates are lower** against pre-recorded
   `bbpPairings` outputs for 40+ players (e.g. 40p/9r reports ~11% exact
   pair agreement on a handful of fixtures). The 5000-tournament A.7
   conformance benchmark tops out at 20p/9r, where the engine is at 0
   discrepancies; at larger scales tie-breaking divergences are expected.
+- **Baku Acceleration is not yet A.7 cross-validated.** The Dutch engine
+  passes A.7 on unaccelerated tournaments; the accelerated path is
+  unit-tested and self-consistent but has not been run through a full
+  5000-tournament `XXA`-enabled cross-check against `bbpPairings`.
 - **No tournament-director UI.** This is an engine / library, not a
   standalone product.
-- **No FIDE endorsement.** A.7 conformance is met technically; endorsement
-  is a separate process that has not been pursued.
+- **Not FIDE-endorsed.** A.7 conformance is met technically; endorsement
+  is a separate administrative process with the FIDE TEC (formerly SPP)
+  Commission.
 - **API is not stabilised.** Version `0.x` may introduce breaking changes.
   API will be frozen at `1.0.0`.
 
@@ -354,9 +361,9 @@ shared or exposed.
 
 Cross-validated against the FIDE-endorsed reference implementations:
 
-- **[bbpPairings](https://github.com/BieremaBoyzvoortMediaFoundation/bbpPairings)**
-  by Bierema Boyzvoort Media Foundation — Apache-2.0.
-- **[JaVaFo](https://javafo.sourceforge.net/)** by Roberto Ricca.
+- **[bbpPairings](https://github.com/BieremaBoyzProgramming/bbpPairings)**
+  by Bierema Boyz Programming — Apache-2.0.
+- **[JaVaFo](https://www.rrweb.org/javafo/)** by Roberto Ricca.
 
 Thanks to their authors for making these tools freely available.
 
