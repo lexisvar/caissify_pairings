@@ -96,9 +96,14 @@ class TRFParser:
 
     @staticmethod
     def _normalise(content: str) -> str:
+        # NB: we deliberately do NOT rstrip each line. In FIDE TRF16 the
+        # round-result block "NNNN c  " (opponent + colour + BLANK result)
+        # encodes a pairing that has been generated but not yet played;
+        # the trailing spaces are the data. After CR/LF normalisation the
+        # tabs-to-spaces conversion is the only transform we apply per line.
         content = content.replace("\t", " ")
         content = content.replace("\r\n", "\n").replace("\r", "\n")
-        return "\n".join(l.rstrip() for l in content.split("\n"))
+        return content
 
     # -- dispatcher ---------------------------------------------------------
 
@@ -280,6 +285,24 @@ class TRFParser:
                         "color": color.lower(),
                         "result": res,
                     }
+            elif len(parts) == 2:
+                # Opponent + colour, no result character: a pairing that
+                # has been generated but not yet played. FIDE TRF16
+                # encodes this as "NNNN c  " (blank result column). We
+                # preserve it with result="" so the arbiter's own UI can
+                # show pending pairings and, crucially, round-trip them.
+                opp_str, color = parts[0], parts[1]
+                opp = (
+                    int(opp_str)
+                    if opp_str.isdigit() and opp_str != "0"
+                    else None
+                )
+                if opp is not None and color.lower() in ("w", "b"):
+                    results[rnd] = {
+                        "opponent": opp,
+                        "color": color.lower(),
+                        "result": "",
+                    }
             rnd += 1
 
     # -- validation ---------------------------------------------------------
@@ -425,22 +448,28 @@ class TRFWriter:
         return "".join(base) + rounds_str
 
     def _format_rounds(self, p: Dict) -> str:
+        # Every round block MUST be exactly 10 characters wide — the parser
+        # reads positionally with text[pos:pos+10]. An empty result
+        # ("pending") is encoded as a blank result column, not omitted, so
+        # subsequent rounds stay aligned.
         results: Dict[int, Dict] = p.get("results", {})
         blocks: List[str] = []
         for rnd in range(1, self.num_rounds + 1):
             r = results.get(rnd)
             if r is None:
-                blocks.append("          ")  # 10 spaces — not paired
-                continue
-            opp = r.get("opponent")
-            if opp is None:
-                # Bye
-                bye_type = r.get("result", "U")
-                blocks.append(f"0000 - {bye_type}  ")
+                block = " " * 10
             else:
-                color = r.get("color", "w")
-                res = r.get("result", "-")
-                blocks.append(f"{opp:>4d} {color} {res}  ")
+                opp = r.get("opponent")
+                if opp is None:
+                    bye_type = (r.get("result") or "U")[:1]
+                    block = f"0000 - {bye_type}  "
+                else:
+                    color = (r.get("color") or "w")[:1]
+                    raw_res = r.get("result", "-")
+                    res = "" if raw_res is None else str(raw_res)
+                    res_col = (res[:1] if res else " ")
+                    block = f"{opp:>4d} {color} {res_col}  "
+            blocks.append(block.ljust(10)[:10])
         return "".join(blocks)
 
 

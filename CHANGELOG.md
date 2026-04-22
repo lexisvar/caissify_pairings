@@ -11,6 +11,25 @@ at `1.0.0`.
 
 ## [0.4.2] — 2026-04-21
 
+### Fixed
+- **TRF parser silently dropped pending-round pairings.** A round block
+  of the form `"NNNN c  "` (opponent + colour + blank result — FIDE
+  TRF16's encoding for a pairing that has been generated but not yet
+  played) was being lost during parse because
+  ``TRFParser._normalise`` applied a global ``rstrip`` to every line,
+  eating the trailing spaces that encode the empty result column, and
+  ``_parse_round_results`` then rejected the 2-token block. Reported by
+  downstream tournament-manager integrators — their arbiter UI could
+  generate round *N*, save the TRF, reload it, and see round *N*
+  silently disappear. The parser now preserves trailing spaces and
+  admits the 2-token case as ``{"opponent": …, "color": …,
+  "result": ""}``.
+- **TRF writer now emits exactly 10 characters per round block.**
+  ``TRFWriter._format_rounds`` previously produced a 9-char block
+  when a round had no result yet, which would corrupt positional
+  alignment of any subsequent round. The writer now always pads to 10,
+  so pending rounds round-trip losslessly through write → parse.
+
 ### Added
 - **Public JSON Schema for engine output.** The shape returned by
   `generate_pairings()` and the `caissify-pairings` CLI is now formally
@@ -28,6 +47,10 @@ at `1.0.0`.
   asserts the schema itself rejects malformed rows (missing `black_id`,
   `bye=true` with non-null `black_id`, null `black_id` without `bye`,
   unknown `bye_type`, `table=0`).
+- `tests/test_trf_pending_rounds.py` — covers the pending-round fix:
+  last-round pending, mid-line pending (parser stays positionally
+  aligned), write/parse round-trip of a tournament that contains a
+  pending round, and ``_normalise`` does not eat trailing spaces.
 
 ### Changed
 - README "Output JSON schema" section expanded into a full field table
