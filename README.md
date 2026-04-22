@@ -146,11 +146,41 @@ you pass engine-specific options from the CLI:
 
 ### Output JSON schema
 
+A regular game has both `white_id` and `black_id` set. A bye row has
+`black_id: null` and `bye: true`:
+
 ```json
 [
   {"white_id": 1, "black_id": 4, "table": 1},
-  {"white_id": 3, "black_id": 2, "table": 2}
+  {"white_id": 3, "black_id": 2, "table": 2},
+  {"white_id": 5, "black_id": null, "table": 3, "bye": true, "bye_type": "U"}
 ]
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `white_id` | int | Player id assigned white (or the sole player if `bye=true`). |
+| `black_id` | int \| null | Player id assigned black. **Nullable** — `null` on bye rows. |
+| `table` | int (≥1) | 1-based table number within the round. |
+| `bye` | bool (optional) | `true` on bye rows. Absent or `false` otherwise. |
+| `bye_type` | string (optional) | FIDE TRF16 bye code: `"U"` (engine-issued PAB), `"F"` (admin full-point), `"H"` (half-point), `"Z"` (zero-point). |
+| `float_type` | string (optional) | Cross-score-group float: `"down"`, `"up"`, `"none"`. Currently emitted by the casual engine only. |
+
+A machine-readable JSON Schema (draft 2020-12) ships inside the wheel
+at `caissify_pairings/schemas/engine_output.schema.json`. Downstream
+consumers (Rust, TypeScript, Swift, …) are strongly encouraged to
+code-generate their types from it rather than re-deriving the shape.
+
+```python
+from caissify_pairings.schemas import engine_output_schema
+schema = engine_output_schema()  # the same dict downstream tools consume
+```
+
+Or from the wheel directly, e.g. for `quicktype`/`datamodel-code-generator`:
+
+```bash
+python -c "import json; from caissify_pairings.schemas import engine_output_schema as s; print(json.dumps(s()))" > engine_output.schema.json
+quicktype -s schema engine_output.schema.json -o engine_output.rs --lang rust
 ```
 
 ## What works today

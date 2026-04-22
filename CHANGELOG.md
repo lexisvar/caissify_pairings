@@ -9,6 +9,32 @@ at `1.0.0`.
 
 ## [Unreleased]
 
+## [0.4.2] — 2026-04-21
+
+### Added
+- **Public JSON Schema for engine output.** The shape returned by
+  `generate_pairings()` and the `caissify-pairings` CLI is now formally
+  described by a JSON Schema (draft 2020-12) shipped inside the wheel at
+  `caissify_pairings/schemas/engine_output.schema.json`. Load it via
+  `caissify_pairings.schemas.engine_output_schema()` or read the file
+  directly with `importlib.resources`. Downstream consumers
+  (Rust/TypeScript/Swift) are encouraged to code-generate types from
+  this schema rather than re-deriving the shape by hand — this is what
+  would have caught the recent downstream bug where `black_id` was
+  modelled as a non-null `i64`.
+- `tests/test_output_schema.py` — regression guard that validates the
+  output of every engine (Dutch, accelerated Dutch, round-robin,
+  casual) plus explicit PAB/pre-bye cases against the schema, and also
+  asserts the schema itself rejects malformed rows (missing `black_id`,
+  `bye=true` with non-null `black_id`, null `black_id` without `bye`,
+  unknown `bye_type`, `table=0`).
+
+### Changed
+- README "Output JSON schema" section expanded into a full field table
+  documenting nullability, bye rows, `bye_type` codes, and `float_type`.
+- `pyproject.toml`: `jsonschema>=4.0` added under an optional
+  `[project.optional-dependencies] test` group — not a runtime dep.
+
 ## [0.4.1] — 2026-04-21
 
 ### Fixed
@@ -122,7 +148,8 @@ First public release.
   the engine is at 0 discrepancies.
 - Not FIDE-endorsed (endorsement is a separate administrative process).
 
-[Unreleased]: https://github.com/lexisvar/caissify_pairings/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/lexisvar/caissify_pairings/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/lexisvar/caissify_pairings/releases/tag/v0.4.2
 [0.4.1]: https://github.com/lexisvar/caissify_pairings/releases/tag/v0.4.1
 [0.4.0]: https://github.com/lexisvar/caissify_pairings/releases/tag/v0.4.0
 [0.3.0]: https://github.com/lexisvar/caissify_pairings/releases/tag/v0.3.0

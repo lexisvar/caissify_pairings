@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/lexisvar/caissify_pairings/schemas/engine_output.schema.json",
+  "title": "CaissifyPairingsEngineOutput",
+  "description": "Output contract of caissify_pairings engines (Dutch, Casual, RoundRobin). This schema describes the value returned by `engine.generate_pairings()` and by `caissify-pairings` CLI: a JSON array of pairing rows.",
+  "type": "array",
+  "items": { "$ref": "#/$defs/PairingRow" },
+  "$defs": {
+    "PairingRow": {
+      "type": "object",
+      "description": "One pairing in a round. A regular game has both white_id and black_id set; a bye row has black_id=null and bye=true.",
+      "additionalProperties": true,
+      "required": ["white_id", "black_id", "table"],
+      "properties": {
+        "white_id": {
+          "description": "Player id assigned white (or the sole player, if bye=true).",
+          "type": "integer"
+        },
+        "black_id": {
+          "description": "Player id assigned black. MUST be null for bye rows.",
+          "type": ["integer", "null"]
+        },
+        "table": {
+          "description": "1-based table number within the round.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "bye": {
+          "description": "True iff this row represents a bye. Absent or false otherwise. When present and true, black_id MUST be null.",
+          "type": "boolean"
+        },
+        "bye_type": {
+          "description": "FIDE TRF16 bye code. U = engine-issued pairing-allocated bye; F = administrative full-point bye; H = half-point bye; Z = zero-point bye. Only set on bye rows.",
+          "type": "string",
+          "enum": ["U", "F", "H", "Z"]
+        },
+        "float_type": {
+          "description": "Float direction for cross-score-group pairings. 'down' = higher-scoring player floated down; 'up' = lower-scoring player floated up; 'none' = no float. Absent on same-score pairings.",
+          "type": "string",
+          "enum": ["down", "up", "none"]
+        }
+      },
+      "allOf": [
+        {
+          "description": "If bye=true, black_id must be null.",
+          "if": {
+            "properties": { "bye": { "const": true } },
+            "required": ["bye"]
+          },
+          "then": {
+            "properties": { "black_id": { "type": "null" } }
+          }
+        },
+        {
+          "description": "If black_id is null, this row must be a bye.",
+          "if": {
+            "properties": { "black_id": { "type": "null" } }
+          },
+          "then": {
+            "required": ["bye"],
+            "properties": { "bye": { "const": true } }
+          }
+        }
+      ]
+    }
+  }
+}
