@@ -13,11 +13,6 @@ requires-python = ">=3.10"
 dependencies = [
     "networkx>=3.0",
 ]
-
-[project.optional-dependencies]
-test = [
-    "jsonschema>=4.0",
-]
 authors = [
     { name = "lexisvar", email = "lexisvar@gmail.com" },
 ]
@@ -45,6 +40,11 @@ classifiers = [
     "Topic :: Games/Entertainment :: Board Games",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Typing :: Typed",
+]
+
+[project.optional-dependencies]
+test = [
+    "jsonschema>=4.0",
 ]
 
 [project.urls]
