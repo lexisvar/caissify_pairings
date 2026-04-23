@@ -9,9 +9,39 @@ at `1.0.0`.
 
 ## [Unreleased]
 
-## [0.4.2] — 2026-04-21
+## [0.4.3] — 2026-04-21
+
+> **Release note.** ``v0.4.2`` was tagged on GitHub but never reached
+> PyPI — the release build failed because an earlier edit to
+> ``pyproject.toml`` put ``[project.optional-dependencies]`` inside the
+> ``[project]`` table, which caused hatchling to reinterpret
+> ``authors`` as an extras group and abort the sdist build. ``v0.4.3``
+> ships everything that was intended for ``v0.4.2`` plus the
+> ``dutch_pairings`` wrapper fix below and the corrected
+> ``pyproject.toml`` layout. There is no ``0.4.2`` on PyPI.
 
 ### Fixed
+- **``dutch_pairings()`` convenience wrapper silently dropped most
+  engine kwargs.** The wrapper in
+  ``caissify_pairings.engines.dutch`` named only ``bye_value`` and
+  ``max_byes_per_player``, so callers who used the documented
+  ``from caissify_pairings.engines.dutch import dutch_pairings``
+  entry point (as shown in the README) and passed ``accelerated=True``
+  — or ``initial_color="black"``, or any future engine option — got a
+  ``TypeError`` instead of the expected Baku / initial-colour
+  behaviour. The wrapper now forwards ``**kwargs`` verbatim to
+  :class:`DutchEngine`, so any option the engine accepts is accepted
+  by the wrapper too, and future options don't require touching this
+  file. Applying ``**kwargs`` here mirrors the fix shipped for the
+  JSON-over-stdin CLI in ``v0.4.1``.
+- **``pyproject.toml`` — ``[project.optional-dependencies]`` now lives
+  outside the ``[project]`` table.** The earlier placement (inside
+  ``[project]``, just after ``dependencies``) silently reassigned
+  ``authors``/``keywords``/``classifiers`` into the extras table as
+  far as TOML parsing was concerned, which caused hatchling to reject
+  the ``v0.4.2`` sdist build with ``TypeError: Dependency #1 of option
+  'authors' … must be a string``. Caught by ``scripts/release.sh``
+  before anything was uploaded.
 - **TRF parser silently dropped pending-round pairings.** A round block
   of the form `"NNNN c  "` (opponent + colour + blank result — FIDE
   TRF16's encoding for a pairing that has been generated but not yet
@@ -51,6 +81,12 @@ at `1.0.0`.
   last-round pending, mid-line pending (parser stays positionally
   aligned), write/parse round-trip of a tournament that contains a
   pending round, and ``_normalise`` does not eat trailing spaces.
+- `tests/test_dutch_pairings_wrapper.py` — locks in the
+  ``dutch_pairings`` wrapper contract: ``accelerated`` and
+  ``initial_color`` are forwarded, legacy ``bye_value`` /
+  ``max_byes_per_player`` still work, arbitrary future kwargs pass
+  through to the engine, and round-1 acceleration actually produces
+  Baku-shaped pairings when requested via the wrapper.
 
 ### Changed
 - README "Output JSON schema" section expanded into a full field table
@@ -171,8 +207,8 @@ First public release.
   the engine is at 0 discrepancies.
 - Not FIDE-endorsed (endorsement is a separate administrative process).
 
-[Unreleased]: https://github.com/lexisvar/caissify_pairings/compare/v0.4.2...HEAD
-[0.4.2]: https://github.com/lexisvar/caissify_pairings/releases/tag/v0.4.2
+[Unreleased]: https://github.com/lexisvar/caissify_pairings/compare/v0.4.3...HEAD
+[0.4.3]: https://github.com/lexisvar/caissify_pairings/releases/tag/v0.4.3
 [0.4.1]: https://github.com/lexisvar/caissify_pairings/releases/tag/v0.4.1
 [0.4.0]: https://github.com/lexisvar/caissify_pairings/releases/tag/v0.4.0
 [0.3.0]: https://github.com/lexisvar/caissify_pairings/releases/tag/v0.3.0
