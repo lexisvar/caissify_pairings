@@ -3384,21 +3384,31 @@ def dutch_pairings(
     previous_pairings: Set[Tuple[int, int]],
     round_number: int,
     total_rounds: int,
-    bye_value: float = 1.0,
-    max_byes_per_player: int = 1,
+    **kwargs,
 ) -> List[dict]:
     """
     FIDE Dutch System pairing entry point.
 
-    Convenience wrapper around DutchEngine for direct use.
+    Convenience wrapper around :class:`DutchEngine` for direct use.
+
+    All engine-specific options are forwarded verbatim as keyword
+    arguments to :class:`DutchEngine`, including (but not limited to):
+
+    - ``bye_value`` (default ``1.0``)
+    - ``max_byes_per_player`` (default ``1``)
+    - ``initial_color`` (default ``"white"`` — FIDE C.04.3 §E)
+    - ``accelerated`` (default ``False`` — Baku Acceleration, C.04.5.1)
+
+    Using ``**kwargs`` means the wrapper never has to be updated when
+    the engine gains a new option; whatever ``DutchEngine`` accepts,
+    this function will pass through.
     """
     engine = DutchEngine(
         players=players,
         previous_pairings=previous_pairings,
         round_number=round_number,
         total_rounds=total_rounds,
-        bye_value=bye_value,
-        max_byes_per_player=max_byes_per_player,
+        **kwargs,
     )
     return engine.generate_pairings()
 
