@@ -71,16 +71,16 @@ from caissify_pairings import generate_pairings
 players = [
     {"id": 1, "name": "Carlsen",  "score": 2.0, "rating": 2830,
      "starting_number": 1, "color_hist": ["white", "black"],
-     "float_history": [], "bye_count": 0},
+     "float_history": ["none", "none"], "bye_count": 0},
     {"id": 2, "name": "Firouzja", "score": 2.0, "rating": 2785,
      "starting_number": 2, "color_hist": ["black", "white"],
-     "float_history": [], "bye_count": 0},
+     "float_history": ["none", "none"], "bye_count": 0},
     {"id": 3, "name": "Ding",     "score": 1.5, "rating": 2780,
      "starting_number": 3, "color_hist": ["white", "black"],
-     "float_history": [], "bye_count": 0},
+     "float_history": ["none", "down"], "bye_count": 0},
     {"id": 4, "name": "Nepo",     "score": 1.5, "rating": 2775,
      "starting_number": 4, "color_hist": ["black", "white"],
-     "float_history": [], "bye_count": 0},
+     "float_history": ["none", "up"], "bye_count": 0},
 ]
 
 pairings = generate_pairings(
@@ -93,6 +93,65 @@ pairings = generate_pairings(
 
 for p in pairings:
     print(f"Table {p['table']}: {p['white_id']} vs {p['black_id']}")
+```
+
+## Caller responsibilities (Dutch, R2 onward)
+
+`caissify-pairings` is a **stateless pairing engine**, not a tournament
+manager. Every call to `generate_pairings(system="dutch", ...)` is a
+self-contained snapshot: the engine paint nothing it isn't told. From
+**round 2 onward** the caller (your tournament manager / app / API) owns
+the per-player history below and MUST recompute it from played results
+before each call. Passing empty lists from R2+ is a bug; the engine
+will produce internally consistent pairings that nevertheless violate
+FIDE C.04.A.
+
+| Field             | Type              | What it must contain (after R{n-1})                                                                                  |
+| ----------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `score`           | `float`           | Cumulative score after all played rounds (1.0 win, 0.5 draw, 0.0 loss, plus byes).                                   |
+| `color_hist`      | `list[str]`       | One entry per played round, value `"white"` / `"black"` (or `"none"` for unplayed rounds, e.g. byes/forfeits).        |
+| `float_history`   | `list[str]`       | One entry per played round, value `"up"` / `"down"` / `"none"`. See "How to derive floats" below.                    |
+| `bye_count`       | `int`             | Number of byes the player has received (any colour code) so far.                                                     |
+| `forfeit_win_count` | `int`           | Optional. Number of forfeit wins. Defaults to `0`.                                                                   |
+| `previous_pairings` | `set[(int,int)]` | Set of unordered `(player_id_a, player_id_b)` tuples for every game played so far. Used to forbid rematches.       |
+
+### How to derive `float_history`
+
+For each played round R, for each player P paired against opponent O:
+
+* If `score(P) before R` &gt; `score(O) before R`: P had a **`"down"`** float in R, O had **`"up"`**.
+* If `score(P) before R` &lt; `score(O) before R`: P had **`"up"`**, O had **`"down"`**.
+* Otherwise (same pre-round score, the normal in-bracket pairing): both had **`"none"`**.
+
+Append the resulting value to each player's `float_history` list. By
+round R, every player should have exactly `R-1` entries. This is the
+same derivation FIDE-endorsed engines (bbpPairings, JaVaFo) perform on
+TRF input, and it's what `caissify_pairings.fpc.check_trf` does
+internally.
+
+> **Why the engine doesn't compute this for you.** The engine receives
+> only `previous_pairings` as a `set[(a, b)]` — no round numbers, no
+> per-round scores, no results. That data shape is intentionally
+> minimal so that callers stay free to use any storage layout, but it
+> means the engine cannot reconstruct float history from its inputs
+> alone. The owner of the result/results history is the only one who
+> can.
+
+### Smoking-gun warning
+
+If you call `generate_pairings(system="dutch", round_number=N, ...)`
+with `N >= 2`, `previous_pairings` non-empty, and every player's
+`float_history` empty, the engine emits a
+`MissingFloatHistoryWarning` (a `UserWarning` subclass). It does not
+change the pairings, only flags that you are almost certainly hitting
+the contract violation above. Promote it to an error in your test
+suite if you want hard enforcement:
+
+```python
+import warnings
+from caissify_pairings import MissingFloatHistoryWarning
+
+warnings.simplefilter("error", MissingFloatHistoryWarning)
 ```
 
 ## Command-line usage

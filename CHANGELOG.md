@@ -9,6 +9,75 @@ at `1.0.0`.
 
 ## [Unreleased]
 
+## [0.4.4] — 2026-04-21
+
+> **Release note.** No algorithm change. ``v0.4.4`` is a
+> documentation, diagnostics, and regression-test release motivated by
+> a downstream divergence report from the Caissify desktop team
+> (``doc/issue_0_4_3/``). The shipped ``DutchEngine`` is byte-identical
+> to ``v0.4.3``; the FIDE A.7 cross-validation result (0 discrepancies
+> on 5000×20p/9r) is unchanged.
+
+### Fixed
+- **Two pairing surfaces could silently disagree.** When a caller
+  invoked ``generate_pairings(system="dutch", ...)`` from round 2
+  onward with ``previous_pairings`` non-empty *and* every player's
+  ``float_history=[]``, the engine produced internally consistent but
+  non-FIDE-conformant pairings, because FIDE C.04.A §C.5/C.6 (no two
+  consecutive same-direction floats) requires float history that the
+  engine cannot reconstruct from the inputs it receives. The same
+  tournament round-tripped through ``caissify_pairings.fpc.check_trf``
+  produced the FIDE-correct pairings (fpc infers ``float_history``
+  from per-round score progression in the TRF), so the two surfaces
+  appeared to disagree about the algorithm. Root cause was caller
+  input shape, not the algorithm itself, but until ``v0.4.4`` the
+  contract was implicit and the failure mode was silent. See
+  ``tests/test_engine_surface_parity.py`` for the regression and
+  ``doc/issue_0_4_3/CAISSIFY_PAIRINGS_DIVERGENCE.md`` for the original
+  report.
+
+### Added
+- **``MissingFloatHistoryWarning``** (a ``UserWarning`` subclass).
+  Emitted by ``generate_pairings(system="dutch", round_number=N, ...)``
+  when ``N >= 2``, ``previous_pairings`` is non-empty, and every
+  player's ``float_history`` is empty — the exact smoking-gun pattern
+  responsible for the desktop divergence above. The warning does not
+  alter pairings; it surfaces the contract violation so downstream
+  callers get a loud, debuggable signal instead of silently wrong
+  output. Promote it to an error in your test suite with
+  ``warnings.simplefilter("error", MissingFloatHistoryWarning)``.
+  Exported at package level: ``from caissify_pairings import
+  MissingFloatHistoryWarning``.
+- **README §"Caller responsibilities (Dutch, R2 onward)"**. Spells out
+  the per-player history fields the caller MUST recompute before each
+  Dutch call (``score``, ``color_hist``, ``float_history``,
+  ``bye_count``, ``forfeit_win_count``, ``previous_pairings``) and
+  documents the exact float-direction derivation rule used by all
+  FIDE-endorsed engines (compare the two players' pre-round scores).
+  The Quick-start example was also corrected to show realistic
+  ``float_history`` values for an R3 call.
+- **``tests/test_engine_surface_parity.py``** — 7 new regression
+  tests. ``test_generate_pairings_with_inferred_floats_matches_fpc_check_trf``
+  asserts that the two pairing surfaces produce the same R3 pairings
+  (as a multiset of ``frozenset({white, black})``) when fed the same
+  per-player float history; ``test_fpc_round_trips_its_own_engine_output``
+  asserts the desktop fixture round-trips cleanly through fpc; the
+  remaining five tests pin down exactly when the new warning fires
+  (R2+ with empty floats, dutch only) and when it does not (round 1,
+  partial floats, non-dutch systems).
+
+### Notes for downstream callers
+- **Caissify desktop / Tournament Manager / API.** No algorithm
+  change; bumping the pin to ``>=0.4.4,<0.5.0`` is safe. The reported
+  R3 divergence will go away the moment the caller starts populating
+  ``float_history`` per the README contract. Without that fix the
+  engine keeps producing the same pairings it did on ``v0.4.3``, just
+  with a runtime warning attached.
+- **Other downstream callers.** If you see ``MissingFloatHistoryWarning``
+  in your logs after upgrading, your code path is feeding the engine
+  insufficient state. Consult README §"Caller responsibilities" for
+  the contract; the warning message points at the same place.
+
 ## [0.4.3] — 2026-04-21
 
 > **Release note.** ``v0.4.2`` was tagged on GitHub but never reached
