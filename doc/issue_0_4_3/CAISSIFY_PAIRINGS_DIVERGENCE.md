@@ -1,10 +1,11 @@
 # `caissify-pairings`: `generate_pairings` and `fpc.check_trf` disagree on Dutch R3
 
-> **Status.** Suspected, not yet root-caused. Reproducible at
-> `caissify-pairings == 0.4.2` on macOS / CPython 3.x. Almost certainly
-> still present in 0.4.3 (the 0.4.3 release notes do not mention any
-> Dutch-algorithm change). Reproducer: `scripts/repro_engine_divergence.py`
-> in this repository.
+> **Status.** **Fixed in v0.4.4.** Root cause: the caller was omitting
+> `float_history` from round 2 onward, causing the two pairing surfaces to
+> diverge silently. The fix adds a `MissingFloatHistoryWarning` and the
+> regression is covered by `tests/test_engine_surface_parity.py`.
+> Reproducer: `doc/issue_0_4_3/repro_engine_divergence.py` in this repository.
+> See the v0.4.4 entry in `CHANGELOG.md` for the full explanation.
 >
 > **Audience.** `caissify-pairings` maintainers. The desktop side
 > (`caissify_tm`) and the Caissify HTTP API are *not* implicated by this
@@ -65,11 +66,11 @@ desktop repo; happy to ship it as part of an upstream issue too).
 
 ## 3. Reproducer
 
-`scripts/repro_engine_divergence.py` in this repository.
+`doc/issue_0_4_3/repro_engine_divergence.py` in this repository.
 
 ```bash
-pip install 'caissify-pairings>=0.4.2,<0.5.0'
-python scripts/repro_engine_divergence.py
+pip install 'caissify-pairings>=0.4.2,<0.4.4'
+python doc/issue_0_4_3/repro_engine_divergence.py
 ```
 
 The script:
@@ -252,7 +253,7 @@ the same:
 ## 8. Contact / artifacts to attach to an upstream issue
 
 - This document: `doc/CAISSIFY_PAIRINGS_DIVERGENCE.md`
-- The reproducer: `scripts/repro_engine_divergence.py`
+- The reproducer: `doc/issue_0_4_3/repro_engine_divergence.py`
 - The screenshot of the Validate dialog showing the in-app symptom:
   `doc/assets/validate-r3-divergence.png` (optional, but useful for
   framing the user-visible impact).

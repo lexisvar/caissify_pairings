@@ -20,8 +20,9 @@ Usage:
 
 Expected: PATH A and PATH B print different R3 pairings.
 
-See `doc/CAISSIFY_PAIRINGS_DIVERGENCE.md` for the full write-up,
-suspected causes, and recommended fixes.
+See `doc/issue_0_4_3/CAISSIFY_PAIRINGS_DIVERGENCE.md` for the full write-up.
+This bug was fixed in v0.4.4; this script reproduces the pre-fix behaviour
+when run against caissify-pairings>=0.4.2,<0.4.4.
 """
 import json
 import subprocess
