@@ -1,0 +1,21 @@
+caissify-pairings — FIDE Dutch System Pairing Engine
+Copyright 2026 Alexis Vargas
+
+This product includes caissify-pairings
+(https://github.com/lexisvar/caissify_pairings), a FIDE A.7-conformant
+Swiss pairing engine implementing the FIDE Dutch System (C.04.3),
+Free Pairings Checker (C.04.A §A.4), and Random Tournament Generator
+(C.04.A §A.5).
+
+Licensed under the Apache License, Version 2.0.
+You may obtain a copy of the License at:
+    http://www.apache.org/licenses/LICENSE-2.0
+
+-------------------------------------------------------------------------------
+
+This repository contains a vendored copy of bbpPairings
+(https://github.com/BieremaBoyzProgramming/bbpPairings), used as a
+FIDE-endorsed reference oracle for cross-validation testing.
+bbpPairings is not included in published wheel/sdist package artifacts.
+bbpPairings is Copyright 2016-2026 Jeremy Bierema and is licensed under
+the Apache License, Version 2.0.
