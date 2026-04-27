@@ -16,8 +16,8 @@
 | A.2.3 | English-language interface | ✅ — all CLIs, docs, and error messages are English |
 | A.2.4 | Read TRF16 input | ✅ — `src/caissify_pairings/trf.py` (parser) + `src/caissify_pairings/fpc.py` |
 | A.2.5 | Write TRF16 output | ✅ — `src/caissify_pairings/trf.py` (writer); used by the RTG |
-| A.2.6 | Publish a Free Pairings Checker (FPC) | ✅ — `caissify-pairings-check <file.trf>` CLI, MIT-licensed, pip-installable |
-| A.2.7 | FIDE mode must not cause pairing mishaps | ✅ — full fast suite passes (204/214); self-consistency: 0 discrepancies on 70 000 rounds |
+| A.2.6 | Publish a Free Pairings Checker (FPC) | ✅ — `caissify-pairings-check <file.trf>` CLI, Apache-2.0-licensed, pip-installable |
+| A.2.7 | FIDE mode must not cause pairing mishaps | ✅ — full fast suite passes (250 passed, 10 skipped); self-consistency: 0 discrepancies on 70 000 rounds |
 | A.2.8 | Additional (non-FIDE) services permitted | ✅ — the `casual` engine is opt-in, clearly marked non-FIDE |
 
 **Error-correction policy (A.2 cont.):** major errors must be fixed
@@ -51,7 +51,7 @@ not yet parsed or emitted — see the Baku row in §A.7 below.
 | Rebuilds tournament round-by-round | ✅ |
 | Pairs each round with the embedded engine | ✅ — uses `DutchEngine` directly |
 | Outputs a consistency report | ✅ — per-round match/mismatch lines on stdout |
-| Freely available, no licence required | ✅ — MIT, on PyPI |
+| Freely available, no licence required | ✅ — Apache-2.0, on PyPI |
 
 ---
 
@@ -63,7 +63,7 @@ not yet parsed or emitted — see the Baku row in §A.7 below.
 | Produces a full TRF16 per tournament | ✅ |
 | Strictly follows the pairing rules | ✅ — uses the same `DutchEngine` as production |
 | Game results follow the FIDE rating probability table | ✅ — expected-score formula in `rtg.py` |
-| Freely available | ✅ — MIT, on PyPI |
+| Freely available | ✅ — Apache-2.0, on PyPI |
 
 ---
 
@@ -111,9 +111,8 @@ absorbed the former Pairing Programs Commission).
 
 1. **The FE-1 form itself** (Annex-1): program name, author, version,
    pairing system, contact details.
-2. **An algorithm-description annex** mapping the Dutch implementation
-   to each clause of C.04.3 (A1–E6). The code is structured to make
-   this mechanical, but the document does not exist yet.
+2. ~~An algorithm-description annex~~ ✅ — [`doc/ALGORITHM_DESCRIPTION.md`](ALGORITHM_DESCRIPTION.md)
+   maps every C.04.3 clause (A1–E6) to the implementation.
 3. **`XXA` TRF support** if the submission is to cover Baku
    Acceleration (C.04.5.1). Optional — the initial submission can
    target the un-accelerated Dutch path only.

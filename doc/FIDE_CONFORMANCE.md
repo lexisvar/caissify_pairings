@@ -6,7 +6,7 @@
 > text, not internal development history.
 
 - **Package:** [`caissify-pairings`](https://pypi.org/project/caissify-pairings/)
-- **License:** MIT
+- **License:** Apache-2.0
 - **Runtime:** pure Python 3.10+ with `networkx` only
 - **Engines shipped:** Dutch (C.04.3), Round-Robin (C.05 Berger Tables),
   Casual Swiss (non-FIDE), Baku Acceleration modifier (C.04.5.1) on the
@@ -125,7 +125,7 @@ immutability, and a multi-round smoke run.
 TRF `XXA` per-round acceleration codes, not via a CLI flag. A full
 5000-tournament A.7 run for the accelerated configuration therefore
 requires emitting `XXA` codes in our RTG output and parsing them back
-in our FPC; both are on the roadmap but neither is done yet.
+in our FPC; both are planned but neither is done yet.
 
 ---
 
@@ -162,19 +162,24 @@ with 0 discrepancies.
 |---|---:|---|
 | `test_dutch_engine.py` | 30 | Dutch engine components (scoregroups, S1/S2, floats, colours) |
 | `test_dutch_integration.py` | 22 | Full-tournament simulations, odd counts, withdrawals |
-| `test_dutch_fpc.py` | 20 | Free Pairings Checker, TRF replay |
-| `test_dutch_fide_official.py` | 5 | FIDE reference fixtures (C.5 / C.9 rule tests) |
+| `test_dutch_fpc.py` | 26 | Free Pairings Checker, TRF replay |
+| `test_dutch_fide_official.py` | 12 | FIDE reference fixtures (C.5 / C.9 rule tests + bbpPairings replays) |
 | `test_dutch_trf_fixtures.py` | 21 | Replay of pre-recorded `bbpPairings` / JaVaFo TRFs |
 | `test_dutch_javafo.py` | 10 | JaVaFo cross-validation (skipped when JaVaFo jar absent) |
-| `test_rtg.py` | 19 | Random Tournament Generator |
+| `test_rtg.py` | 22 | Random Tournament Generator |
 | `test_rtg_fpc_validation.py` | 4 | A.7 self-consistency (2 smoke + 2 @slow 5000-tournament) |
 | `test_cross_validation.py` | 8 | A.7 bbpPairings cross-validation (4 smoke + 4 @slow) |
 | `test_round_robin_engine.py` | 35 | Berger-table verification, double-cycle, odd counts |
 | `test_casual_engine.py` | 18 | Casual Swiss engine |
 | `test_baku_acceleration.py` | 14 | Baku Acceleration on Dutch |
+| `test_output_schema.py` | 17 | Engine output JSON Schema validation |
+| `test_cli.py` | 8 | CLI entry points (pairings, check, rtg) |
+| `test_trf_pending_rounds.py` | 8 | TRF pending-round parse/write round-trip |
+| `test_engine_surface_parity.py` | 7 | `generate_pairings` vs `fpc.check_trf` surface parity |
+| `test_dutch_pairings_wrapper.py` | 6 | `dutch_pairings()` convenience wrapper |
 
-Fast suite (`pytest -m "not slow"`) — current status: **204 passed,
-10 skipped, 8 `@slow` deselected**, ~96 s. The 8 `@slow` tests are the
+Fast suite (`pytest -m "not slow"`) — current status: **250 passed,
+10 skipped, 8 `@slow` deselected**, ~87 s. The 8 `@slow` tests are the
 full 5000-tournament A.7 benchmarks; the 10 skipped tests are the
 JaVaFo ones that require the JaVaFo jar to be present at
 `vendor/javafo/javafo.jar`.
