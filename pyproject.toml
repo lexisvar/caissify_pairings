@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "caissify-pairings"
-version = "0.4.4"
+version = "0.4.5"
 description = "Chess tournament pairing engines for Python — FIDE Dutch System (A.7-conformant, with Baku Acceleration), FIDE Berger round-robin, and a simple casual Swiss engine."
 readme = "README.md"
 license = "Apache-2.0"
@@ -81,6 +81,7 @@ exclude = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not slow'"
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
 ]

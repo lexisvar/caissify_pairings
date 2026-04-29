@@ -284,6 +284,13 @@ def _build_engine_players(
             # Round 1 — include everyone who has any result at all
             if not p.get("results"):
                 continue
+            # Exclude players with a pre-assigned arbiter bye in R1,
+            # same as the guard applied for rounds 2+.
+            r1 = p["results"].get(1)
+            if r1 and r1.get("opponent") is None and r1.get("result") in (
+                "Z", "H", "F", "-"
+            ):
+                continue
         elif not has_this_round:
             # Later rounds — skip players who don't appear in this round
             # (withdrawn or absent)

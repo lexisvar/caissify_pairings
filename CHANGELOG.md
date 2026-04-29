@@ -9,6 +9,30 @@ at `1.0.0`.
 
 ## [Unreleased]
 
+## [0.4.5] — 2026-04-30
+
+### Fixed
+- **FPC falsely reported Round 1 discrepancies when a player had a
+  pre-assigned arbiter bye (``H``, ``Z``, ``F``, or ``-``) in Round 1.**
+  ``fpc.check_trf`` re-pairs each historical round with the engine to
+  detect discrepancies. For rounds 2 and later, players with a
+  pre-assigned bye result were already excluded from the engine's
+  candidate set; Round 1 lacked the equivalent guard, so those players
+  were included and caused the engine to be called with a different
+  field than the arbiter originally saw. The result was a spurious
+  mismatch report for every tournament whose first round contained at
+  least one arbiter-allocated bye. The fix adds the same exclusion
+  guard to the Round 1 branch of ``_build_engine_players``. No pairing
+  output is affected; only ``check_trf`` results change (false positives
+  eliminated). See ``doc/issue_0_4_4/`` for the original report.
+
+### Changed
+- **Slow tests are now excluded by default.** ``pytest`` is configured
+  with ``addopts = "-m 'not slow'"`` so a plain ``pytest`` run (or IDE
+  test-runner invocation) completes in ~85 s instead of ~33 min. The
+  5 000-tournament cross-validation suite (marked ``@pytest.mark.slow``)
+  remains available via ``python -m pytest -m slow``.
+
 ## [0.4.4] — 2026-04-21
 
 > **Release note.** No algorithm change. ``v0.4.4`` is a
