@@ -9,6 +9,13 @@ at `1.0.0`.
 
 ## [Unreleased]
 
+## [0.4.7] — 2026-04-30
+
+### Changed
+- Version bump only; re-release of 0.4.6 under a new version number because
+  PyPI permanently blocks reuse of a previously-uploaded filename.
+  No code changes from 0.4.6.
+
 ## [0.4.6] — 2026-04-30
 
 ### Fixed
