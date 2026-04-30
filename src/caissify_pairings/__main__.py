@@ -32,7 +32,7 @@ from __future__ import annotations
 import json
 import sys
 
-from caissify_pairings import generate_pairings
+from caissify_pairings import __version__, generate_pairings
 
 # Keys that the CLI consumes directly as positional arguments to
 # ``generate_pairings``. Everything else is forwarded as a kwarg.
@@ -48,6 +48,10 @@ _RESERVED_KEYS = frozenset(
 
 
 def main() -> None:
+    if len(sys.argv) >= 2 and sys.argv[1] in ("--version", "-V"):
+        print(f"caissify-pairings {__version__}")
+        return
+
     if len(sys.argv) >= 2 and sys.argv[1] == "--check":
         from caissify_pairings.fpc import main as fpc_main
         sys.argv = [sys.argv[0]] + sys.argv[2:]

@@ -9,6 +9,27 @@ at `1.0.0`.
 
 ## [Unreleased]
 
+## [0.4.6] — 2026-04-30
+
+### Fixed
+- **FPC produced entirely wrong pairings for any tournament whose starting
+  numbers are not in rating order** (i.e. virtually every real tournament
+  exported from Vega, Swiss-Manager, or similar software, where starting
+  numbers are assigned at registration and are independent of rating).
+  `_build_engine_players` was setting `"pairing_number": sn` (the TRF
+  starting number) on every player dict passed to the engine.
+  `DutchEngine._build_players` treats a present `pairing_number` as a
+  persisted Round-1 value and uses it directly, bypassing the rating-sort
+  assignment. Because the Dutch algorithm uses pairing number for bracket
+  splitting, S1/S2 division, color assignment, and BSN tiebreaking,
+  passing wrong pairing numbers corrupted all downstream decisions. The
+  bug was invisible in the existing test suite because RTG assigns starting
+  numbers in descending rating order, so SN == pairing rank by accident.
+  The fix removes `"pairing_number"` from the player dict so the engine
+  re-derives pairing numbers from the rating sort, matching the original
+  pairing run. Verified on the Burwood Saturday Rapid field: discrepancies
+  dropped from 50 to 0 after the fix.
+
 ## [0.4.5] — 2026-04-30
 
 ### Fixed

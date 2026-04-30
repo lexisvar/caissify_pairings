@@ -376,7 +376,6 @@ def _build_engine_players(
             "score": score,
             "rating": p.get("rating", 0),
             "starting_number": sn,
-            "pairing_number": sn,
             "title": p.get("title", ""),
             "color_hist": color_hist,
             "float_history": float_history,
