@@ -9,6 +9,18 @@ at `1.0.0`.
 
 ## [Unreleased]
 
+## [0.4.8] — 2026-05-04
+
+### Fixed
+- **Board ordering bug: games were sorted by the higher of the two players' scores
+  instead of the sum of both scores.** FIDE C.04.3, Swiss Manager, and Vega all
+  order boards by descending combined score (sum of white + black), using the
+  higher individual rating only as a tiebreaker. The previous `max(score)`
+  key caused a floater pairing (e.g. 2.5 + 3.0 = 5.5) to appear above a
+  same-group game (3.0 + 3.0 = 6.0) whenever the floater had the highest
+  single rating. Fixed `_assign_table_numbers` to sort by
+  `(-sum_score, -best_rating, best_pn)`.
+
 ## [0.4.7] — 2026-04-30
 
 ### Changed
