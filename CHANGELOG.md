@@ -9,7 +9,7 @@ at `1.0.0`.
 
 ## [Unreleased]
 
-## [0.4.8] — 2026-05-04
+## [0.4.9] — 2026-05-04
 
 ### Fixed
 - **Board ordering bug: games were sorted by the higher of the two players' scores
@@ -20,6 +20,12 @@ at `1.0.0`.
   same-group game (3.0 + 3.0 = 6.0) whenever the floater had the highest
   single rating. Fixed `_assign_table_numbers` to sort by
   `(-sum_score, -best_rating, best_pn)`.
+
+## [0.4.8] — 2026-05-04
+
+- Version bump only; the board ordering fix documented in 0.4.9 was not
+  included in this release (the fix was not staged for the commit). No code
+  changes from 0.4.7.
 
 ## [0.4.7] — 2026-04-30
 

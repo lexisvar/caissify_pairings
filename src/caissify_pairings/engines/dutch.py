@@ -3346,10 +3346,7 @@ class DutchEngine(BasePairingEngine):
         def pairing_sort_key(p: dict) -> tuple:
             w = self._player_map.get(p["white_id"])
             b = self._player_map.get(p["black_id"]) if p.get("black_id") else None
-            best_score = max(
-                w.score if w else 0,
-                b.score if b else 0,
-            )
+            sum_score = (w.score if w else 0) + (b.score if b else 0)
             best_rating = max(
                 w.rating if w else 0,
                 b.rating if b else 0,
@@ -3358,7 +3355,7 @@ class DutchEngine(BasePairingEngine):
                 w.pairing_number if w else 999,
                 b.pairing_number if b else 999,
             )
-            return (-best_score, -best_rating, best_pn)
+            return (-sum_score, -best_rating, best_pn)
 
         regular.sort(key=pairing_sort_key)
         byes.sort(key=pairing_sort_key)
