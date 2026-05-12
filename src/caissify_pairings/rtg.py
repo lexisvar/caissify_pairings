@@ -265,6 +265,8 @@ def generate_tournament(
         "system": "Individual: Swiss-System",
         "total_rounds": num_rounds,
     }
+    if accelerated:
+        tournament_meta["accelerated_rounds"] = {1, 2}
 
     return TRFWriter(tournament_meta, trf_players, num_rounds).write()
 

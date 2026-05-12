@@ -120,6 +120,22 @@ class TRFParser:
                 pass
             return
 
+        if code == "XXA":
+            # Baku Acceleration sequence record (TRF16 §C.04.5.1).
+            # Format: "XXA <round> <group_size>"
+            # We collect the round numbers; group_size is ignored (derived
+            # from player count by the engine itself).
+            parts = content.strip().split()
+            if parts:
+                try:
+                    rnd = int(parts[0])
+                    if "accelerated_rounds" not in self.tournament:
+                        self.tournament["accelerated_rounds"] = set()
+                    self.tournament["accelerated_rounds"].add(rnd)
+                except ValueError:
+                    pass
+            return
+
         if code == "XXC":
             self.tournament["color_method"] = content.strip()
             return
@@ -375,6 +391,11 @@ class TRFWriter:
         if t.get("round_dates"):
             lines.append(f"122 {t['round_dates']}")
         lines.append(f"XXR {self.num_rounds}")
+        accel_rounds = sorted(self.tournament.get("accelerated_rounds") or [])
+        if accel_rounds:
+            group_size = (len(self.players) + 1) // 2
+            for rnd in accel_rounds:
+                lines.append(f"XXA {rnd} {group_size}")
         if t.get("color_method"):
             lines.append(f"XXC {t['color_method']}")
         if t.get("special_rules"):

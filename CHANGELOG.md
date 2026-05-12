@@ -9,6 +9,24 @@ at `1.0.0`.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-05-12
+
+### Added
+- **Baku Acceleration full round-trip support in TRF16, FPC, and RTG.**
+  - `TRFParser` now parses `XXA` records (FIDE C.04.5.1 / TRF16 Annex-2)
+    and exposes them as `tournament["accelerated_rounds"]` (a set of round
+    numbers).
+  - `TRFWriter` emits `XXA <round> <group_size>` lines after `XXR` when
+    `tournament["accelerated_rounds"]` is set, producing self-describing
+    TRF output compatible with `bbpPairings` and other FIDE-conformant tools.
+  - `rtg.generate_tournament(accelerated=True)` now writes `XXA 1` and
+    `XXA 2` records into the generated TRF header.
+  - `fpc.check_trf` reads `XXA` records and passes `accelerated=True` to
+    the Dutch engine for each accelerated round. Previously, FPC always
+    re-paired with plain Dutch regardless of the TRF header, causing false
+    discrepancies in rounds 1–2 of Baku-accelerated events (30–60+
+    phantom discrepancies for a 60-player field).
+
 ## [0.4.9] — 2026-05-04
 
 ### Fixed

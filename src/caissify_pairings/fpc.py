@@ -64,6 +64,10 @@ def check_trf(trf_content: str) -> Dict:
     total_rounds = tournament.get("total_rounds") or _max_round(players)
     num_players = len(players)
 
+    # Baku Acceleration: rounds listed in XXA records are paired with
+    # accelerated=True; all others use plain Dutch (C.04.3).
+    accelerated_rounds: set = tournament.get("accelerated_rounds") or set()
+
     # Build a player-map keyed by starting_number
     player_map: Dict[int, Dict] = {p["starting_number"]: p for p in players}
 
@@ -97,6 +101,7 @@ def check_trf(trf_content: str) -> Dict:
                 round_number=rnd,
                 total_rounds=total_rounds,
                 initial_color=initial_color,
+                accelerated=(rnd in accelerated_rounds),
             )
             engine_output = engine.generate_pairings()
         except Exception as exc:
