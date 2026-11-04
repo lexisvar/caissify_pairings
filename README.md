@@ -366,6 +366,50 @@ It never mutates your input dicts. Use `dutch` if you need FIDE A.7
 behaviour — the two engines share the exact same input/output contract,
 so switching is a one-line change.
 
+## Rush (arena) — quick start
+
+Rush events are not played in rounds: players are paired as soon as they
+are free, and the most points at the end wins. `caissify_pairings.arena`
+holds the pure parts; your server owns the live loop (who is connected,
+creating games, the event clock).
+
+```python
+from caissify_pairings.arena import pair_waiting, score_game, standings
+
+# Every couple of seconds, with the players who are free right now:
+pairs = pair_waiting(
+    [
+        {"id": 1, "rank": 1, "rating": 2310, "last_opponent": 7, "colors": ["w", "b", "w"]},
+        {"id": 2, "rank": 2, "rating": 2250, "last_opponent": None, "colors": ["b"]},
+        # ...
+    ],
+    field_size=48,          # players in the standings (weights rank gaps)
+)
+# -> [{"white_id": 2, "black_id": 1}, ...]
+
+# When a game ends, for each player:
+r = score_game("win", streak=2, berserk=True, own_moves=23, game_moves=41)
+# -> {"points": 5, "streak": 3, "on_fire": True, "berserk_bonus": True, "short_draw": False}
+
+table = standings([{"id": 1, "points": 12, "performance": 2380, "games": 7}, ...])
+```
+
+Rules:
+
+1. **Pairing:**
+   - As many games as possible.
+   - Players close in the standings meet; rank gaps weigh more near the top, then the rating gap counts.
+   - Large pools are matched in rank-ordered chunks.
+2. **Hard rules:** no immediate rematch of the last opponent, and never the same colour three games in a row. The player who has had White more often, or last, gets Black.
+3. **Scoring:**
+   - Win 2, draw 1, loss 0.
+   - After two wins in a row a player is *on fire*: wins are worth 4 and draws 2 until the next non-win.
+   - A berserk win (half clock, no increment) earns +1 if the berserk player made at least 7 moves.
+   - A draw under 10 moves scores 0.
+4. **Standings:** points, then performance rating, then fewer games.
+
+All functions are deterministic and never mutate their inputs.
+
 ## What does not work yet
 
 Being honest up front — these are known limitations you will hit if your

@@ -12,11 +12,13 @@ Engines:
     "round_robin"  — FIDE Berger Tables (FIDE Handbook §C.05).
                      Optional ``cycles=2`` for double round-robin.
     "casual"       — Simple Swiss for non-rated tournaments.
+
+Rush (arena, no rounds): see :mod:`caissify_pairings.arena`.
 """
 
 from __future__ import annotations
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 import warnings
 from typing import List, Set, Tuple

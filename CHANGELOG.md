@@ -9,6 +9,15 @@ at `1.0.0`.
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-11-04
+
+### Added
+- **Rush (arena) format** in the new `caissify_pairings.arena` module:
+  - `pair_waiting()` pairs the players who are free right now. It produces as many games as possible, at the lowest total cost, where cost is the rank gap (weighted towards the top of the table) plus the rating gap. Large pools are split into rank-ordered chunks.
+  - Hard rules: no immediate rematch, and never the same colour three times in a row. Colours are balanced.
+  - `score_game()`: win 2, draw 1, loss 0; double points on fire after two wins in a row; +1 for a berserk win of 7+ moves; 0 for a draw under 10 moves.
+  - `performance_rating()` and `standings()`: points, then performance, then fewer games.
+
 ## [0.5.0] — 2026-05-12
 
 ### Added
