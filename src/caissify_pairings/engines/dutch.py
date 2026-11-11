@@ -213,13 +213,17 @@ class DutchEngine(BasePairingEngine):
     # controls the cost of the two-phase joint optimisation.
     MAX_JOINT_EVALS = 200
 
-    # Baku Acceleration — number of rounds during which the virtual
-    # point is awarded to the top half (FIDE C.04.5.1: rounds 1 and 2).
-    BAKU_ACCELERATION_ROUNDS = 2
+    # Baku Acceleration (FIDE C.04.7 §1, in force from 1 February 2026):
+    # the points of a win, given as virtual points to group GA for the
+    # first half (rounded up) of the accelerated rounds, halved for the
+    # rest. The accelerated rounds are the first half (rounded up) of the
+    # tournament's rounds.
+    BAKU_WIN_POINTS = 1.0
 
-    # Baku Acceleration — magnitude of the virtual point per accelerated
-    # round (FIDE C.04.5.1: 1.0 = full point).
-    BAKU_VIRTUAL_POINT = 1.0
+    # C.04.2 §2.2.2: title order for the initial ranking.
+    TITLE_ORDER = {
+        "GM": 8, "IM": 7, "WGM": 6, "FM": 5, "WIM": 4, "CM": 3, "WFM": 2, "WCM": 1,
+    }
 
     def __init__(
         self,
@@ -231,6 +235,7 @@ class DutchEngine(BasePairingEngine):
         max_byes_per_player: int = 1,
         initial_color: str = "white",
         accelerated: bool = False,
+        acceleration_group_size: Optional[int] = None,
         **kwargs,
     ):
         super().__init__(
@@ -247,8 +252,13 @@ class DutchEngine(BasePairingEngine):
 
         # Apply Baku virtual scores BEFORE building DutchPlayer objects.
         # Caller's `players` list is never mutated.
-        if accelerated and round_number <= self.BAKU_ACCELERATION_ROUNDS:
-            players = self._apply_baku_virtual_scores(players)
+        self.baku_virtual_points = (
+            self.baku_virtual_points_for(round_number, total_rounds) if accelerated else 0.0
+        )
+        if self.baku_virtual_points:
+            players = self._apply_baku_virtual_scores(
+                players, self.baku_virtual_points, acceleration_group_size
+            )
 
         # Build internal DutchPlayer objects and assign pairing numbers
         self._players: List[DutchPlayer] = self._build_players(players)
@@ -259,38 +269,78 @@ class DutchEngine(BasePairingEngine):
     # ------------------------------------------------------------------
 
     @classmethod
-    def _apply_baku_virtual_scores(cls, players: List[dict]) -> List[dict]:
+    def baku_virtual_points_for(cls, round_number: int, total_rounds: int) -> float:
         """
-        Return a copy of ``players`` with the Baku virtual point added to
-        the top half (FIDE C.04.5.1).
+        Virtual points for group GA in ``round_number`` (FIDE C.04.7 §1.4):
+        the accelerated rounds are the first half (rounded up) of the
+        tournament; GA gets a win's points in the first half (rounded up)
+        of them and half that in the rest. A 9-round event: 1 point in
+        rounds 1-3, 0.5 in rounds 4-5, nothing from round 6.
+        """
+        if total_rounds < 1 or round_number < 1:
+            return 0.0
+        accelerated_rounds = -(-total_rounds // 2)
+        full_rounds = -(-accelerated_rounds // 2)
+        if round_number <= full_rounds:
+            return cls.BAKU_WIN_POINTS
+        if round_number <= accelerated_rounds:
+            return cls.BAKU_WIN_POINTS / 2
+        return 0.0
 
-        Top half is defined by initial pairing number (i.e. by rating
-        order — lowest ``starting_number`` = highest rated). For an odd
-        player count the extra slot goes to the *top* half (ceiling
-        division), matching the FIDE convention.
+    @staticmethod
+    def baku_group_size(participants: int) -> int:
+        """GA: the first half of the participants rounded up to an even
+        number, i.e. 2 x ceil(N / 4) (C.04.7 §1.2; 161 players -> 82)."""
+        if participants < 1:
+            return 0
+        return 2 * (-(-participants // 4))
+
+    @classmethod
+    def accelerated_rounds_for(cls, total_rounds: int) -> List[int]:
+        """The rounds in which Baku gives virtual points."""
+        return [r for r in range(1, total_rounds + 1) if cls.baku_virtual_points_for(r, total_rounds)]
+
+    @classmethod
+    def _apply_baku_virtual_scores(
+        cls,
+        players: List[dict],
+        virtual_points: float = 1.0,
+        group_size: Optional[int] = None,
+    ) -> List[dict]:
+        """
+        Return a copy of ``players`` with ``virtual_points`` added to the
+        pairing score of group GA (FIDE C.04.7 §1.2, §1.5).
+
+        GA is the participants with the lowest tournament pairing numbers
+        (``starting_number``): ``group_size`` of them when given (the TRF
+        records it, so late entries don't move the boundary, §1.3),
+        otherwise 2 x ceil(N / 4) where N is the number of participants
+        (the highest starting number, so absent players still count).
 
         Caller's player dicts are never mutated.
         """
         if not players:
             return []
 
-        n = len(players)
-        cutoff = (n + 1) // 2  # ceiling — extra slot to the top half
+        if group_size is None:
+            n = max(len(players), max((p.get("starting_number") or 0) for p in players))
+            group_size = cls.baku_group_size(n)
 
-        # Sort by starting_number (ascending) → first `cutoff` are the top
-        # half. Falling back to id keeps the result deterministic when
-        # starting_number is missing or duplicated.
-        ordered = sorted(
-            players,
-            key=lambda p: (p.get("starting_number", p["id"]), p["id"]),
-        )
-        top_half_ids = {p["id"] for p in ordered[:cutoff]}
+        def tpn(p: dict) -> int:
+            return p.get("starting_number") or p["id"]
+
+        has_numbers = all(p.get("starting_number") for p in players)
+        if has_numbers:
+            group_a = {p["id"] for p in players if tpn(p) <= group_size}
+        else:
+            ordered = sorted(players, key=lambda p: (tpn(p), p["id"]))
+            group_a = {p["id"] for p in ordered[:group_size]}
 
         result: List[dict] = []
         for p in players:
             p_copy = dict(p)
-            if p_copy["id"] in top_half_ids:
-                p_copy["score"] = p_copy.get("score", 0.0) + cls.BAKU_VIRTUAL_POINT
+            if p_copy["id"] in group_a:
+                p_copy["score"] = p_copy.get("score", 0.0) + virtual_points
             result.append(p_copy)
         return result
 
@@ -302,23 +352,26 @@ class DutchEngine(BasePairingEngine):
         """
         Build DutchPlayer objects and assign *pairing numbers*.
 
-        Pairing numbers are assigned once (before round 1) and remain fixed.
-        Ordering: higher rating → higher title → lower starting_number → alphabetical.
+        Pairing numbers are the tournament pairing numbers (TPN, FIDE
+        C.04.2 §2.3). When every player has a distinct ``starting_number``
+        those are the TPNs, as the arbiter assigned them (late entries and
+        rating corrections included). Otherwise they are worked out with
+        the initial ranking of §2.2: rating, then title
+        (GM-IM-WGM-FM-WIM-CM-WFM-WCM), then name.
         """
-        title_priority = {
-            "GM": 9, "IM": 8, "FM": 7, "CM": 6,
-            "WGM": 5, "WIM": 4, "WFM": 3, "WCM": 2,
-        }
+        numbers = [p.get("starting_number") for p in raw]
+        if raw and all(isinstance(n, int) and n > 0 for n in numbers) and len(set(numbers)) == len(numbers):
+            sorted_raw = sorted(raw, key=lambda p: p["starting_number"])
+        else:
+            def sort_key(p: dict):
+                return (
+                    -(p.get("rating") or 0),
+                    -self.TITLE_ORDER.get((p.get("title") or "").upper(), 0),
+                    p.get("starting_number") or 10**9,
+                    (p.get("name") or "").lower(),
+                )
 
-        def sort_key(p: dict):
-            return (
-                -p.get("rating", 0),
-                -title_priority.get(p.get("title", ""), 0),
-                p.get("starting_number", 999),
-                p.get("name", "").lower(),
-            )
-
-        sorted_raw = sorted(raw, key=sort_key)
+            sorted_raw = sorted(raw, key=sort_key)
 
         players: List[DutchPlayer] = []
         for idx, p in enumerate(sorted_raw, start=1):
@@ -3326,10 +3379,39 @@ class DutchEngine(BasePairingEngine):
                 "bye_type": "U",
             })
 
-        # --- Step 5: Assign table numbers ---
+        # --- Step 5: Flag absolute-criterion fallbacks ---
+        # When no pairing satisfies C1-C3 the engine still returns a full
+        # round (the arbiter decides), but it says so instead of breaking
+        # the rules silently: a bye to a player who already had a PAB or a
+        # win's points without playing (C2), or a repeat / forbidden
+        # pairing (C1).
+        self._flag_violations(output)
+
+        # --- Step 6: Assign table numbers ---
         output = self._assign_table_numbers(output)
 
         return output
+
+    def _flag_violations(self, output: List[dict]) -> None:
+        for entry in output:
+            if entry.get("bye"):
+                player = self._player_map.get(entry["white_id"])
+                if player is not None and not player.is_bye_eligible:
+                    entry.setdefault("violations", []).append("C2")
+                    logger.warning(
+                        "Round %d: no complete pairing respects C2; player %s gets a second bye",
+                        self.round_number, player.id,
+                    )
+                continue
+            a, b = entry["white_id"], entry.get("black_id")
+            if b is None:
+                continue
+            if (a, b) in self.previous_pairings or (b, a) in self.previous_pairings:
+                entry.setdefault("violations", []).append("C1")
+                logger.warning(
+                    "Round %d: no complete pairing respects C1; %s and %s meet again",
+                    self.round_number, a, b,
+                )
 
     # ------------------------------------------------------------------
     # Table number assignment

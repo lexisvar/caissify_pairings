@@ -120,17 +120,39 @@ class TestInitialOrdering(unittest.TestCase):
         # Player 1 (2400) should be PN 1, Player 4 (2100) should be PN 4
         self.assertEqual(pns, [(1, 1), (2, 2), (3, 3), (4, 4)])
 
-    def test_pairing_numbers_reverse_rating(self):
-        """If players are given in reverse rating order, PNs still follow rating desc."""
+    def test_pairing_numbers_follow_rating_without_starting_numbers(self):
+        """Without (distinct) starting numbers, PNs follow rating desc (C.04.2 §2.2)."""
+        players = [
+            {"id": 10, "name": "Low", "score": 0.0, "rating": 1500},
+            {"id": 20, "name": "High", "score": 0.0, "rating": 2500},
+        ]
+        engine = DutchEngine(players, set(), 1, 5)
+        pm = {p.id: p.pairing_number for p in engine._players}
+        self.assertEqual(pm[20], 1)
+        self.assertEqual(pm[10], 2)
+
+    def test_starting_numbers_are_the_pairing_numbers(self):
+        """The arbiter's starting ranks are the TPNs (C.04.2 §2.3), even
+        when they no longer follow the ratings (a late entry, a correction)."""
         players = [
             {"id": 10, "name": "Low", "score": 0.0, "rating": 1500, "starting_number": 1},
             {"id": 20, "name": "High", "score": 0.0, "rating": 2500, "starting_number": 2},
         ]
         engine = DutchEngine(players, set(), 1, 5)
-        # Player 20 (2500) → PN 1, Player 10 (1500) → PN 2
         pm = {p.id: p.pairing_number for p in engine._players}
-        self.assertEqual(pm[20], 1)
-        self.assertEqual(pm[10], 2)
+        self.assertEqual(pm[10], 1)
+        self.assertEqual(pm[20], 2)
+
+    def test_title_order_breaks_rating_ties(self):
+        """GM-IM-WGM-FM-WIM-CM-WFM-WCM (C.04.2 §2.2.2): a WGM ranks above an FM."""
+        players = [
+            {"id": 1, "name": "Ana", "score": 0.0, "rating": 2300, "title": "FM"},
+            {"id": 2, "name": "Bea", "score": 0.0, "rating": 2300, "title": "WGM"},
+            {"id": 3, "name": "Cal", "score": 0.0, "rating": 2300, "title": ""},
+        ]
+        engine = DutchEngine(players, set(), 1, 5)
+        pm = {p.id: p.pairing_number for p in engine._players}
+        self.assertEqual((pm[2], pm[1], pm[3]), (1, 2, 3))
 
 
 class TestScoregroups(unittest.TestCase):
@@ -433,3 +455,24 @@ class TestMultiRoundSimulation(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestAbsoluteCriteriaFallbacks(unittest.TestCase):
+    def test_a_forced_second_bye_is_flagged(self):
+        # Three players, everyone has met and the only bye-eligible
+        # player... doesn't exist: all had a PAB. The engine still pairs
+        # the round but flags the bye.
+        players = [
+            {"id": i, "name": f"P{i}", "score": 1.0, "rating": 2000 - i, "starting_number": i,
+             "color_hist": ["white"], "float_history": ["down"], "bye_count": 1}
+            for i in (1, 2, 3)
+        ]
+        out = DutchEngine(players, set(), 4, 5).generate_pairings()
+        bye = next(p for p in out if p.get("bye"))
+        self.assertEqual(bye.get("violations"), ["C2"])
+
+    def test_legal_rows_carry_no_flag(self):
+        players = [{"id": i, "name": f"P{i}", "score": 0.0, "rating": 2000 - i, "starting_number": i}
+                   for i in (1, 2, 3, 4)]
+        out = DutchEngine(players, set(), 1, 5).generate_pairings()
+        self.assertTrue(all("violations" not in p for p in out))

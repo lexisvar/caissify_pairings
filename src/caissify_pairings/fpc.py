@@ -67,6 +67,7 @@ def check_trf(trf_content: str) -> Dict:
     # Baku Acceleration: rounds listed in XXA records are paired with
     # accelerated=True; all others use plain Dutch (C.04.3).
     accelerated_rounds: set = tournament.get("accelerated_rounds") or set()
+    acceleration_group_size = tournament.get("acceleration_group_size")
 
     # Build a player-map keyed by starting_number
     player_map: Dict[int, Dict] = {p["starting_number"]: p for p in players}
@@ -102,6 +103,7 @@ def check_trf(trf_content: str) -> Dict:
                 total_rounds=total_rounds,
                 initial_color=initial_color,
                 accelerated=(rnd in accelerated_rounds),
+                acceleration_group_size=acceleration_group_size,
             )
             engine_output = engine.generate_pairings()
         except Exception as exc:
@@ -331,14 +333,23 @@ def _build_engine_players(
             res = r.get("result", "-")
 
             if opp is None:
-                # Bye — counts as downfloat per A.4.b
-                bye_count += 1
-                float_history.append("down")
+                # No opponent: a pairing-allocated bye (U), an arbiter's
+                # full-point (F) or half-point (H) bye, or an absence
+                # (Z / -). FIDE C.04.3 (2026) §1.4.3: a downfloat goes to
+                # the PAB and to anyone who scored more than a loss without
+                # playing; a 0-point absence is no float. Basic Rules §4
+                # (criterion C2): only a PAB or a win's points without
+                # playing rule a player out of the next PAB, so only those
+                # count as byes here.
                 if res in ("1", "+", "F", "U"):
                     score += 1.0
+                    bye_count += 1
+                    float_history.append("down")
                 elif res in ("=", "H"):
                     score += 0.5
-                # Z/- → 0
+                    float_history.append("down")
+                else:
+                    float_history.append("none")
             else:
                 color = r.get("color", "w")
                 # Only count colours from actually played games.

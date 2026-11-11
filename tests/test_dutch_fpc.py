@@ -289,3 +289,35 @@ class TestFPCSelfConsistency:
                 for r in report["rounds"] if not r["match"]
             )
         )
+
+
+class TestByeAndFloatBookkeeping:
+    """FIDE C.04.3 (2026) §1.4.3 and Basic Rules §4 (criterion C2)."""
+
+    def _history(self, result):
+        player_map = {
+            # Round 1 is the history; round 2 (any pairing) makes everyone active.
+            1: {"starting_number": 1, "name": "A", "rating": 2000,
+                "results": {1: {"opponent": None, "result": result, "color": "-"},
+                            2: {"opponent": 2, "result": "1", "color": "w"}}},
+            2: {"starting_number": 2, "name": "B", "rating": 1900,
+                "results": {1: {"opponent": 3, "result": "1", "color": "w"},
+                            2: {"opponent": 1, "result": "0", "color": "b"}}},
+            3: {"starting_number": 3, "name": "C", "rating": 1800,
+                "results": {1: {"opponent": 2, "result": "0", "color": "b"},
+                            2: {"opponent": None, "result": "U", "color": "-"}}},
+        }
+        p = next(e for e in _build_engine_players(player_map, 2) if e["id"] == 1)
+        return p["bye_count"], p["float_history"], p["score"]
+
+    def test_a_pab_is_a_bye_and_a_downfloat(self):
+        assert self._history("U") == (1, ["down"], 1.0)
+
+    def test_a_full_point_bye_rules_out_the_next_pab(self):
+        assert self._history("F") == (1, ["down"], 1.0)
+
+    def test_a_half_point_bye_floats_down_but_keeps_pab_eligibility(self):
+        assert self._history("H") == (0, ["down"], 0.5)
+
+    def test_a_zero_point_absence_is_no_float(self):
+        assert self._history("Z") == (0, ["none"], 0.0)

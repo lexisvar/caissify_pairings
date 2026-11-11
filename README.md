@@ -3,10 +3,9 @@
 Chess tournament pairing engines for Python. Ships three engines:
 
 - **`dutch`** — the **FIDE Dutch System (C.04.3)**, cross-validated
-  against the FIDE-endorsed reference `bbpPairings` to full **A.7
-  conformance**. Use this for rated Swiss tournaments. Optional
-  **Baku Acceleration** (FIDE C.04.5.1) via `accelerated=True` for
-  large opens.
+  against `bbpPairings` on small and mid-size fields (see the known
+  limitations below for larger ones). Optional **Baku Acceleration**
+  (FIDE C.04.7, 2026) via `accelerated=True` for large opens.
 - **`round_robin`** — **FIDE Berger Tables** (FIDE Handbook §C.05).
   Every player meets every other player; supports single and double
   round-robin. Verified to match the published FIDE tables exactly.
@@ -15,7 +14,7 @@ Chess tournament pairing engines for Python. Ships three engines:
 
 | Engine        | Use case                                    | FIDE compliance | Complexity |
 |---------------|---------------------------------------------|-----------------|------------|
-| `dutch`       | Rated Swiss / official tournaments          | A.7 — 0 discrepancies on 70k rounds; Baku C.04.5.1 acceleration available | High (full C.04.3) |
+| `dutch`       | Rated Swiss / official tournaments          | 0 discrepancies against bbpPairings up to 20 players / 9 rounds; Baku (C.04.7) available | High (full C.04.3) |
 | `round_robin` | Round-robin / Scheveningen / club leagues   | Berger Tables verified vs FIDE Handbook §C.05 | Low |
 | `casual`      | Club nights, ladders, non-rated Swiss       | (not the goal) | Low |
 
@@ -257,12 +256,14 @@ quicktype -s schema engine_output.schema.json -o engine_output.rs --lang rust
 
 ## Baku Acceleration — quick start
 
-Baku Acceleration (FIDE Handbook §C.04.5.1) is an opt-in modifier on
-the Dutch engine. For rounds 1 and 2 the top half of the field (by
-initial pairing number / rating) gets a **+1 virtual point** added to
-its score for pairing purposes only. The result: top-half plays
-top-half and bottom-half plays bottom-half early, spreading the
-field — exactly what large opens need.
+Baku Acceleration (FIDE C.04.7 §1, in force from 1 February 2026) is an
+opt-in modifier on the Dutch engine. Group GA (the first half of the
+field rounded up to an even number, 2 x ceil(N/4), by pairing number)
+gets **virtual points** added to its score for pairing purposes only:
+a win's points in the first half (rounded up) of the accelerated
+rounds and half that in the rest, where the accelerated rounds are the
+first half (rounded up) of the tournament. In 9 rounds: +1 in rounds
+1-3, +0.5 in rounds 4-5, nothing after.
 
 ```python
 from caissify_pairings import generate_pairings
@@ -279,12 +280,13 @@ pairings = generate_pairings(
 
 What you can rely on:
 
-- The virtual point is applied only for rounds 1 and 2; round 3
-  onwards is a normal Dutch pairing on real scores.
+- The schedule follows `total_rounds`; past the accelerated rounds the
+  pairing is a normal Dutch pairing on real scores.
+- GA is fixed by pairing number, so players absent from a round don't
+  move the boundary. Pass `acceleration_group_size` (the TRF `XXA`
+  record carries it) to keep it fixed after late entries (C.04.7 §1.3).
 - Real `score`, `color_hist`, etc. are never modified — only the
   internal pairing-time score is inflated, on a private copy.
-- For odd player counts the extra slot goes to the **top** half
-  (FIDE convention — ceiling division).
 - Output shape is unchanged (`white_id`, `black_id`, `table`, …).
 
 To generate accelerated TRF fixtures end-to-end the RTG exposes the
@@ -428,8 +430,10 @@ use-case is beyond them:
   5000-tournament `XXA`-enabled cross-check against `bbpPairings`.
 - **No tournament-director UI.** This is an engine / library, not a
   standalone product.
-- **Not FIDE-endorsed.** A.7 conformance is met technically; endorsement
-  is a separate administrative process with the FIDE TEC (formerly SPP)
+- **Not FIDE-accepted.** Since 2026 FIDE accepts pairing engines only
+  as part of a Tournament Handler Program (TAPC, Handbook C.02.03),
+  after a 50,000-tournament check; this engine has not been through it.
+  That is a separate administrative process with the FIDE TEC (formerly SPP)
   Commission.
 - **API is not stabilised.** Version `0.x` may introduce breaking changes.
   API will be frozen at `1.0.0`.

@@ -38,6 +38,11 @@
           "description": "Float direction for cross-score-group pairings. 'down' = higher-scoring player floated down; 'up' = lower-scoring player floated up; 'none' = no float. Absent on same-score pairings.",
           "type": "string",
           "enum": ["down", "up", "none"]
+        },
+        "violations": {
+          "description": "Absolute criteria this row breaks because no complete pairing respects them (the arbiter decides): C1 = the two players have met before or are a forbidden pair; C2 = the bye goes to a player who already had a pairing-allocated bye or a win's points without playing. Absent when the row is legal.",
+          "type": "array",
+          "items": { "type": "string", "enum": ["C1", "C2"] }
         }
       },
       "allOf": [

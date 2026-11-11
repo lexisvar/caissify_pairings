@@ -1,24 +1,20 @@
 """
 Unit tests for Baku Acceleration on the FIDE Dutch engine.
 
-Baku Acceleration (FIDE Handbook §C.04.5.1) is an opt-in modifier on the
-Dutch engine: for rounds 1 and 2, the top half of the field (by initial
-pairing number / rating) receives a +1 *virtual point* added to its
-score for pairing purposes only. From round 3 onwards no virtual point
-is added.
+Baku Acceleration (FIDE C.04.7 §1, in force from 1 February 2026) is an
+opt-in modifier on the Dutch engine. Group GA (the first 2 x ceil(N/4)
+participants by pairing number) gets virtual points added to its pairing
+score: a win's points in the first half (rounded up) of the accelerated
+rounds, half that in the rest. The accelerated rounds are the first half
+(rounded up) of the tournament's rounds.
 
-These tests verify the *contract* of the modifier:
+These tests verify the contract of the modifier:
 
 - Off by default — no behavioural change to the existing Dutch engine.
-- Round 1 with N players splits cleanly into two independent halves:
-  top half plays top half, bottom half plays bottom half.
-- Round 2 keeps the virtual point applied.
-- Round 3 onwards: virtual point is gone — pairings match a baseline
-  non-accelerated Dutch run from the same state.
-- Odd N — the extra slot goes to the *top* half (FIDE convention).
+- The schedule and GA size follow C.04.7's examples.
+- Round 1 with N players splits into GA and GB.
+- Past the accelerated rounds the pairings match a non-accelerated run.
 - Caller's player dicts are never mutated.
-- The internal helper ``_apply_baku_virtual_scores`` is deterministic
-  and never mutates its input.
 """
 
 from __future__ import annotations
@@ -81,18 +77,51 @@ class TestBakuVirtualScoreHelper(unittest.TestCase):
         self.assertEqual(score_by_id[7], 0.0)
         self.assertEqual(score_by_id[8], 0.0)
 
-    def test_top_half_is_ceiling_for_odd_n(self):
+    def test_group_a_is_half_rounded_up_to_even(self):
         players = _players(9)
         out = DutchEngine._apply_baku_virtual_scores(players)
 
         score_by_id = {p["id"]: p["score"] for p in out}
-        # Top half = ceil(9/2) = 5 players → ids 1..5
-        for pid in (1, 2, 3, 4, 5):
-            self.assertEqual(score_by_id[pid], 1.0,
-                             f"player {pid} should be in top half")
-        for pid in (6, 7, 8, 9):
-            self.assertEqual(score_by_id[pid], 0.0,
-                             f"player {pid} should be in bottom half")
+        # GA = 2 x ceil(9/4) = 6 players → ids 1..6
+        for pid in (1, 2, 3, 4, 5, 6):
+            self.assertEqual(score_by_id[pid], 1.0, f"player {pid} should be in GA")
+        for pid in (7, 8, 9):
+            self.assertEqual(score_by_id[pid], 0.0, f"player {pid} should be in GB")
+
+    def test_group_size_from_the_trf_wins(self):
+        out = DutchEngine._apply_baku_virtual_scores(_players(9), 1.0, group_size=4)
+        self.assertEqual(sum(1 for p in out if p["score"] == 1.0), 4)
+
+    def test_absent_players_still_count_towards_the_field(self):
+        # 12 participants, but players 3 and 11 sit this round out:
+        # GA stays TPN 1..6.
+        players = [p for p in _players(12) if p["id"] not in (3, 11)]
+        out = DutchEngine._apply_baku_virtual_scores(players)
+        self.assertEqual({p["id"] for p in out if p["score"] == 1.0}, {1, 2, 4, 5, 6})
+
+
+class TestBakuSchedule(unittest.TestCase):
+    """C.04.7 §1.2 and §1.4.4 examples."""
+
+    def test_group_size(self):
+        self.assertEqual(DutchEngine.baku_group_size(161), 82)
+        self.assertEqual(DutchEngine.baku_group_size(8), 4)
+        self.assertEqual(DutchEngine.baku_group_size(10), 6)
+
+    def test_nine_rounds(self):
+        points = [DutchEngine.baku_virtual_points_for(r, 9) for r in range(1, 10)]
+        self.assertEqual(points, [1, 1, 1, 0.5, 0.5, 0, 0, 0, 0])
+        self.assertEqual(DutchEngine.accelerated_rounds_for(9), [1, 2, 3, 4, 5])
+
+    def test_eleven_rounds(self):
+        points = [DutchEngine.baku_virtual_points_for(r, 11) for r in range(1, 12)]
+        self.assertEqual(points, [1, 1, 1, 0.5, 0.5, 0.5, 0, 0, 0, 0, 0])
+
+    def test_engine_applies_the_half_point_in_late_accelerated_rounds(self):
+        engine = DutchEngine(_players(8), set(), 4, 9, accelerated=True)
+        self.assertEqual(engine.baku_virtual_points, 0.5)
+        engine = DutchEngine(_players(8), set(), 6, 9, accelerated=True)
+        self.assertEqual(engine.baku_virtual_points, 0.0)
 
     def test_does_not_mutate_input(self):
         players = _players(6)
@@ -291,12 +320,12 @@ class TestBakuRoundTwo(unittest.TestCase):
 
 
 class TestBakuRoundThreeOnwards(unittest.TestCase):
-    def test_round_three_matches_unaccelerated(self):
+    def test_past_the_accelerated_rounds_matches_unaccelerated(self):
         """
-        Build identical R3 input states for two engines — one with
+        Build identical input states for two engines — one with
         ``accelerated=True``, one without — and assert pairings match.
-        Because R3 is past the Baku window, the virtual point must not
-        be applied and the output must be identical.
+        Round 6 of 9 is past the accelerated rounds (1-5), so no virtual
+        point applies and the output must be identical.
         """
         players = _players(8)
         # Plausible R3 state: scores spread between 0 and 2.
@@ -315,14 +344,14 @@ class TestBakuRoundThreeOnwards(unittest.TestCase):
             "dutch",
             players=copy.deepcopy(players),
             previous_pairings=set(prev),
-            round_number=3,
+            round_number=6,
             total_rounds=9,
         )
         accelerated = generate_pairings(
             "dutch",
             players=copy.deepcopy(players),
             previous_pairings=set(prev),
-            round_number=3,
+            round_number=6,
             total_rounds=9,
             accelerated=True,
         )

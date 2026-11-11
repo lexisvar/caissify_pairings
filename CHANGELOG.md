@@ -9,6 +9,37 @@ at `1.0.0`.
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-11-11
+
+Pairings change for some tournaments (see below), so this is a minor
+release, not a patch.
+
+### Changed
+- **Pairing numbers are the starting ranks.** When every player has a
+  distinct `starting_number`, the Dutch engine uses them as the
+  tournament pairing numbers (FIDE C.04.2 §2.3), so late entries and
+  rating corrections keep the numbers the arbiter gave. Without them it
+  ranks by rating, then title in FIDE's order (GM-IM-WGM-FM-WIM-CM-WFM-WCM;
+  FM used to rank above WGM), then name.
+- **Baku Acceleration follows FIDE C.04.7 (2026).** GA is 2 x ceil(N/4)
+  players (was half rounded up); the accelerated rounds are the first
+  half of the tournament (was rounds 1-2); GA gets a win's points for
+  the first half of them and half that for the rest. New
+  `acceleration_group_size` option, also read from and written to the
+  TRF `XXA` record. `DutchEngine.baku_virtual_points_for()`,
+  `baku_group_size()` and `accelerated_rounds_for()` expose the schedule.
+- **Bye and float history per C.04.3 (2026) §1.4.3 and criterion C2**
+  in the checker (`fpc`): only a pairing-allocated bye or a win's points
+  without playing rules a player out of the next bye (a half-point bye
+  no longer does); a half-point bye is a downfloat, a 0-point absence
+  is no float (it was a downfloat).
+
+### Added
+- **`violations` on engine output rows.** When no pairing respects the
+  absolute criteria the engine still pairs the round, but now marks the
+  rows that break them: `C1` (players who met before, or a forbidden
+  pair) and `C2` (a second bye). It used to break them silently.
+
 ## [0.6.0] — 2026-11-04
 
 ### Added

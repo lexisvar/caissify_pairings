@@ -266,7 +266,7 @@ def generate_tournament(
         "total_rounds": num_rounds,
     }
     if accelerated:
-        tournament_meta["accelerated_rounds"] = {1, 2}
+        tournament_meta["accelerated_rounds"] = set(DutchEngine.accelerated_rounds_for(num_rounds))
 
     return TRFWriter(tournament_meta, trf_players, num_rounds).write()
 
