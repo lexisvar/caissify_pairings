@@ -3343,6 +3343,21 @@ class DutchEngine(BasePairingEngine):
                     remainder = [p for p in all_players
                                  if p.id not in paired_ids]
 
+            # No legal pairing for the rest (C.04.3 C1/C3 leave nobody for
+            # them): pair them with each other anyway, so the round keeps at
+            # most the one bye an odd field needs. Step 5 flags every board
+            # that breaks an absolute criterion: the arbiter decides, as
+            # JaVaFo's "pairing impossible, intervene manually" asks.
+            keep = 1 if len(remainder) % 2 else 0
+            if len(remainder) - keep >= 2:
+                bye_first = self._select_bye_player(remainder) if keep and bye_player is None else None
+                rest = [p for p in remainder if p is not bye_first]
+                if keep and bye_first is None and bye_player is None:
+                    bye_first, rest = rest[-1], rest[:-1]
+                for a, b in zip(rest[0::2], rest[1::2]):
+                    paired.append((a, b))
+                remainder = [bye_first] if bye_first is not None else rest[len(rest) // 2 * 2:]
+
             # Assign bye to remaining unpaired player
             for p in remainder:
                 if bye_player is None:
@@ -3392,6 +3407,13 @@ class DutchEngine(BasePairingEngine):
 
         return output
 
+    def _colour_rule_exempt(self, a: DutchPlayer, b: DutchPlayer) -> bool:
+        """The last round lets top scorers (more than half the points) break the absolute colour rules (C3)."""
+        if not self._is_last_round:
+            return False
+        top = (self.round_number - 1) / 2.0
+        return a.score > top or b.score > top
+
     def _flag_violations(self, output: List[dict]) -> None:
         for entry in output:
             if entry.get("bye"):
@@ -3410,6 +3432,15 @@ class DutchEngine(BasePairingEngine):
                 entry.setdefault("violations", []).append("C1")
                 logger.warning(
                     "Round %d: no complete pairing respects C1; %s and %s meet again",
+                    self.round_number, a, b,
+                )
+            white, black = self._player_map.get(a), self._player_map.get(b)
+            if (white is not None and black is not None
+                    and (white.would_violate_absolute_color("white") or black.would_violate_absolute_color("black"))
+                    and not self._colour_rule_exempt(white, black)):
+                entry.setdefault("violations", []).append("C3")
+                logger.warning(
+                    "Round %d: no complete pairing respects C3; %s (white) and %s break an absolute colour rule",
                     self.round_number, a, b,
                 )
 

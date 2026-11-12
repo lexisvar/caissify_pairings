@@ -40,9 +40,9 @@
           "enum": ["down", "up", "none"]
         },
         "violations": {
-          "description": "Absolute criteria this row breaks because no complete pairing respects them (the arbiter decides): C1 = the two players have met before or are a forbidden pair; C2 = the bye goes to a player who already had a pairing-allocated bye or a win's points without playing. Absent when the row is legal.",
+          "description": "Absolute criteria this row breaks because no complete pairing respects them (the arbiter decides): C1 = the two players have met before or are a forbidden pair; C2 = the bye goes to a player who already had a pairing-allocated bye or a win's points without playing; C3 = a player gets a colour the absolute colour rules forbid (three in a row, or a colour difference beyond 2), outside the last-round exemption for top scorers. Absent when the row is legal.",
           "type": "array",
-          "items": { "type": "string", "enum": ["C1", "C2"] }
+          "items": { "type": "string", "enum": ["C1", "C2", "C3"] }
         }
       },
       "allOf": [

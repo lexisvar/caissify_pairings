@@ -169,6 +169,9 @@ def _build_trf(
 # ---------------------------------------------------------------------------
 
 
+IMPOSSIBLE = "impossible"
+
+
 def _call_javafo(trf_content: str) -> Optional[List[Tuple[int, int]]]:
     """
     Call JavaFo via the bridge and return pairings.
@@ -189,6 +192,10 @@ def _call_javafo(trf_content: str) -> Optional[List[Tuple[int, int]]]:
     if proc.returncode != 0:
         print(f"  [JavaFo ERROR] {proc.stderr.strip()}", file=sys.stderr)
         return None
+
+    # No legal pairing: JaVaFo says so instead of pairing ("intervene manually").
+    if "Pairing impossible" in proc.stdout or "Pairing impossible" in proc.stderr:
+        return IMPOSSIBLE
 
     lines = proc.stdout.strip().split("\n")
     if not lines:
@@ -368,7 +375,13 @@ def _run_cross_validation(
         jf_all[rnd] = jf_tuples
 
         # --- Compare ---
-        if jf_tuples is not None:
+        if jf_tuples == IMPOSSIBLE:
+            # Both agree when our engine flags the rule it had to break for the arbiter.
+            flagged = any(p.get("violations") for p in our_pairings)
+            matches.append(flagged)
+            if not flagged:
+                mismatches.append({"round": rnd, "error": "JaVaFo: pairing impossible; ours not flagged"})
+        elif jf_tuples is not None:
             our_norm = _normalise_pairings(our_tuples)
             jf_norm = _normalise_pairings(jf_tuples)
             match = our_norm == jf_norm

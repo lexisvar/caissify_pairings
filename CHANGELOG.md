@@ -9,6 +9,24 @@ at `1.0.0`.
 
 ## [Unreleased]
 
+## [0.7.1] — 2026-11-12
+
+### Fixed
+- **A round with no legal pairing no longer hands out extra byes.** When
+  every pairing of the remaining players breaks an absolute criterion
+  (C1 rematch or C3 colour), the Dutch engine used to give each of them a
+  pairing-allocated bye — two byes in an even field, silently. It now
+  pairs them with each other, keeps at most the one bye an odd field
+  needs, and flags every board that breaks a rule for the arbiter (the
+  case where JaVaFo answers "Pairing impossible — intervene manually").
+
+### Added
+- **`C3` in `violations`:** a board where a player gets a colour the
+  absolute colour rules forbid (three in a row, or a colour difference
+  beyond 2), outside the last-round exemption for top scorers. The
+  output schema lists it; consumers that read `violations` strictly
+  (generated types) must accept the new value.
+
 ## [0.7.0] — 2026-11-11
 
 Pairings change for some tournaments (see below), so this is a minor

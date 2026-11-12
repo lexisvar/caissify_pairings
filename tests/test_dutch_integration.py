@@ -150,13 +150,19 @@ def _validate_round(pairings, previous, round_num, pmap, total_rounds):
     regular = [p for p in pairings if not p.get("bye")]
     byes = [p for p in pairings if p.get("bye")]
 
-    # Check no repeat pairings
+    # Check no repeat pairings. When no legal pairing exists the engine may
+    # pair a repeat, but only flagged (violations: C1) for the arbiter.
     for p in regular:
         pair = tuple(sorted([p["white_id"], p["black_id"]]))
-        if pair in previous:
+        if pair in previous and "C1" not in (p.get("violations") or []):
             violations.append(
                 f"Round {round_num}: Repeat pairing {pair}"
             )
+
+    # At most one bye, and only for an odd number of players.
+    pab = [p for p in byes if p.get("bye_type", "U") == "U"]
+    if len(pab) > 1 or (pab and (len(regular) * 2 + len(pab)) % 2 == 0):
+        violations.append(f"Round {round_num}: {len(pab)} pairing-allocated byes")
 
     # Check each player appears exactly once
     ids_seen = []

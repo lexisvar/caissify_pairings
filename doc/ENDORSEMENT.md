@@ -17,7 +17,7 @@
 | A.2.4 | Read TRF16 input | ✅ — `src/caissify_pairings/trf.py` (parser) + `src/caissify_pairings/fpc.py` |
 | A.2.5 | Write TRF16 output | ✅ — `src/caissify_pairings/trf.py` (writer); used by the RTG |
 | A.2.6 | Publish a Free Pairings Checker (FPC) | ✅ — `caissify-pairings-check <file.trf>` CLI, Apache-2.0-licensed, pip-installable |
-| A.2.7 | FIDE mode must not cause pairing mishaps | ✅ — full fast suite passes (250 passed, 10 skipped); self-consistency: 0 discrepancies on 70 000 rounds |
+| A.2.7 | FIDE mode must not cause pairing mishaps | ✅ — full suite passes; self-consistency: 0 discrepancies on 70 000 rounds. Since 0.7.1 a round with no legal pairing keeps at most one bye and flags every rule it breaks (`violations`: C1/C2/C3) instead of handing out extra byes (found against JaVaFo's "pairing impossible") |
 | A.2.8 | Additional (non-FIDE) services permitted | ✅ — the `casual` engine is opt-in, clearly marked non-FIDE |
 
 **Error-correction policy (A.2 cont.):** major errors must be fixed

@@ -18,7 +18,7 @@ Rush (arena, no rounds): see :mod:`caissify_pairings.arena`.
 
 from __future__ import annotations
 
-__version__ = "0.7.0"
+__version__ = "0.7.1"
 
 import warnings
 from typing import List, Set, Tuple
