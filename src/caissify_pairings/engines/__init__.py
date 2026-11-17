@@ -15,6 +15,7 @@ _REGISTRY: Dict[str, str] = {
     "dutch": "caissify_pairings.engines.dutch",
     "casual": "caissify_pairings.engines.casual",
     "round_robin": "caissify_pairings.engines.round_robin",
+    "team_swiss": "caissify_pairings.engines.team_swiss",
 }
 
 # Populated on first access
