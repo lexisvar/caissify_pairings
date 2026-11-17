@@ -9,7 +9,9 @@ at `1.0.0`.
 
 ## [Unreleased]
 
-Target: 0.8.0. Nothing changes for the existing engines: the Dutch
+## [0.8.0] — 2026-11-17
+
+Nothing changes for the existing engines: the Dutch
 engine is untouched and its outputs are identical.
 
 ### Added
