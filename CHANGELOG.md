@@ -56,6 +56,9 @@ engine is untouched and its outputs are identical.
   comparable round; board-1 colours agree in every round except 91 Baku
   rounds, where Gacrux reads the first-team (4.2.1) on the standings
   score (`baku_score_for_colours=False` reproduces it: 7,921 of 7,921).
+  The default is now `baku_score_for_colours=False` (the real primary score
+  for the first-team, as C.04.7 1.5 does not list colours), so the engine
+  agrees with Gacrux in all 7,921 compared rounds; `True` keeps the old reading.
   It found one reading to correct: C6's "following scoregroup" is now
   the scoregroup with the next lower score, which "is now empty" when
   its teams already floated up (`c6_following`, default `"score"`).

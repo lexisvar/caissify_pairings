@@ -304,8 +304,10 @@ class TeamSwissSettings:
     type_b_keep_strong_in_last_round: bool = True
     #: Article 3.4.3: count forfeited matches as "played".
     forfeits_count_as_played: bool = False
-    #: C.04.7 Article 1.5: first-team (4.2.1) uses the pairing score.
-    baku_score_for_colours: bool = True
+    #: C.04.7 Article 1.5 lists what the Baku pairing score is for (scoregroups,
+    #: their order, board order), not colours: the first-team (4.2.1) uses the
+    #: real primary score by default. True uses the pairing score instead.
+    baku_score_for_colours: bool = False
 
     def __post_init__(self):
         self.primary_score = str(self.primary_score).lower()

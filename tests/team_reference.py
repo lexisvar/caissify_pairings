@@ -69,6 +69,7 @@ class Ref:
         self.accelerated = opt.get("accelerated", False)
         self.win_mp = opt.get("match_points_win", 2.0)
         self.bye_is_floater = opt.get("bye_is_floater", False)
+        self.baku_for_colours = opt.get("baku_score_for_colours", False)
         self.forbidden = set()
         for item in opt.get("forbidden_pairs") or []:
             for a, b in combinations(item, 2):
@@ -319,7 +320,9 @@ class Ref:
         """Return (white, black)."""
         def first_key(t):
             sec = self.secondary(t) if self.use_secondary else 0
-            return (-self.score(t), -sec, self.tpn[t])
+            # 4.2.1 first-team: the real primary score unless baku_score_for_colours
+            sc = self.score(t) if self.baku_for_colours else self.score(t) - self.virtual(t, self.r)
+            return (-sc, -sec, self.tpn[t])
 
         f, o = sorted((a, b), key=first_key)
         cf, co = self.colours(f), self.colours(o)

@@ -215,9 +215,10 @@ Option `forfeits_count_as_played=True`.
 **A8. Where the Baku pairing score is used.** C.04.7 1.5 names
 scoregroups, their internal order and the board order. We also use it
 for every other "score" of the pairing rules: PAB 3.4.2, C5, the floater
-definition (pairing scores of round *r − 1*) and the first-team (4.2.1;
-option `baku_score_for_colours=False` uses the real primary score
-there). The secondary score never gets virtual points. Virtual points
+definition (pairing scores of round *r − 1*). The first-team (4.2.1)
+uses the **real** primary score, since 1.5 does not list colours
+(default since the Gacrux cross-validation, D2;
+`baku_score_for_colours=True` uses the pairing score there instead). The secondary score never gets virtual points. Virtual points
 are a win's match points (2 by default), as in C.04.7 Example 2.
 
 **A9. Rule 4.3.6 with unplayed rounds.** "Alternate the colours to the
@@ -487,9 +488,11 @@ pairs, the other team gets White on board 1.
 
 The letter of C.04.7 1.5 leans towards Gacrux's reading.
 `baku_score_for_colours=False` reproduces Gacrux in **91 of 91** rounds,
-and with it the whole corpus agrees in 7,921 of 7,921 rounds. The
-default is unchanged here; it is a rules decision worth putting to the
-TEC.
+and with it the whole corpus agrees in 7,921 of 7,921 rounds.
+**Decision (owner, after this run): the default is now
+`baku_score_for_colours=False`**, following the letter of 1.5 and the
+reference. `True` keeps the earlier reading. Still worth confirming with
+the TEC.
 
 **D3. Board order, tie-break 3.6.3 (C.04.2 Article 3.6). Verdict (b):
 Gacrux deviation.** 113 rounds (1.4% of the identical rounds), order
