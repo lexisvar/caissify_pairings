@@ -328,6 +328,7 @@ def simulate_team_tournament(
             "accelerated": accelerated,
             "initial_color": initial_color,
             "boards": boards,
+            "board_colours": settings.board_colours,
             "match_points_win": settings.match_points_win,
             "match_points_draw": settings.match_points_draw,
             "match_points_loss": settings.match_points_loss,

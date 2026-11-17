@@ -304,6 +304,13 @@ class TestRTGandFPC:
         r2 = [r for r in report["rounds"] if r["round"] == 2][0]
         assert not r2["match"] and any(d.startswith("Colours") for d in r2["discrepancies"])
 
+    def test_rtg_writes_the_board_colours_it_used(self):
+        # Record 352 must hold the sequence the simulation used, or the
+        # file's board-1 colours cannot be read back.
+        trf = generate_team_tournament(num_teams=8, num_rounds=4, seed=5, boards=6, board_colours="WWBBWB")
+        assert "352 WWBBWB" in trf
+        assert check_team_trf(trf)["summary"]["rounds_mismatched"] == 0
+
     def test_baku_rtg_writes_record_250(self):
         trf = generate_team_tournament(num_teams=12, num_rounds=9, seed=1, accelerated=True)
         assert "192 FIDE_TEAM_TYPEA_MP_GP_BAKU" in trf
