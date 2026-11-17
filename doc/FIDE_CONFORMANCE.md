@@ -9,8 +9,8 @@
 - **License:** Apache-2.0
 - **Runtime:** pure Python 3.10+ with `networkx` only
 - **Engines shipped:** Dutch (C.04.3), Round-Robin (C.05 Berger Tables),
-  Casual Swiss (non-FIDE), Baku Acceleration modifier (C.04.5.1) on the
-  Dutch engine
+  Team Swiss (C.04.6, 2026), Casual Swiss (non-FIDE), Baku Acceleration
+  (C.04.7) on the Dutch and team engines
 
 ---
 
@@ -20,6 +20,7 @@
 |---|---|---|---|
 | **Dutch** | C.04.3 (2025 rules) | **A.7 conformant — 0 discrepancies / 5000 tournaments on both canonical benchmarks.** | `bbpPairings` 6.0.0 (primary), JaVaFo 2.2 (secondary triage) |
 | **Dutch + Baku Acceleration** | C.04.5.1 | Implemented and self-consistent (RTG → FPC). **Not yet cross-validated at A.7 scale** against `bbpPairings` via `XXA` TRF tags. | — |
+| **Team Swiss** | C.04.6 (2026) | Implemented article by article ([`TEAM_SWISS.md`](TEAM_SWISS.md)); agrees with an independent brute-force implementation of the text on every comparable round of thousands of random tournaments. **Not yet cross-validated against an outside reference.** | Brute-force reference (`tests/team_reference.py`) |
 | **Round-Robin (Berger Tables)** | C.05 | Reproduces the published FIDE Berger tables exactly for `n = 4, 6, 8`; structural invariants tested up to `n = 20`. Supports single- and double-cycle schedules with FIDE colour-reversal rule. | FIDE Handbook §C.05 tables |
 | **Casual Swiss** | *(not a FIDE system)* | Explicitly out of scope for FIDE compliance — intended for club nights and online ladders. | — |
 

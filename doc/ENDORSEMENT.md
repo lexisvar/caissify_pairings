@@ -1,9 +1,90 @@
-# FIDE Endorsement — C.04.A Checklist
+# FIDE Endorsement — C.02.03 §7 and C.04.A Checklist
 
-> A concise status of `caissify-pairings` against each clause of
-> [FIDE Handbook C.04.A](https://handbook.fide.com/chapter/C04A)
-> (*Endorsement of a software program*). This is a checklist, not a
-> marketing document. Where something is not yet done, it says so.
+> A concise status of `caissify-pairings` against the FIDE rules for
+> pairing software. This is a checklist, not a marketing document.
+> Where something is not yet done, it says so.
+>
+> **`caissify-pairings` is not FIDE-accepted or FIDE-endorsed.** No
+> application has been made.
+
+Since **1 March 2026** the former C.04.A (*Endorsement of a software
+program*) is part of **C.02.03 §7, "Tournament Handler Programs"**
+(Chess Equipment with Electronic Components, approved by the Council
+on 11/12/2025), with the common process in C.02.01 (General Rules) and
+the public register in C.02.04. Section 1 below maps §7 for both FIDE
+systems the library implements. The C.04.A tables after it are kept as
+the historical record of the work done under the old text.
+
+---
+
+## 1. C.02.03 §7 — Tournament Handler Programs (from 1 March 2026)
+
+### 1.1 What §7 asks for, and the process around it
+
+* A **THP** is "a program running on a commercially available operating
+  system and capable to manage Swiss tournaments by handling player
+  data, pairings, and results". `caissify-pairings` is a **pairing
+  engine library** with a checker and a generator, not a THP: like the
+  TEC's own reference engine (Gacrux, "an engine, not a Tournament
+  Handler Program"), it can only reach acceptance as the engine of a
+  THP that embeds it (C.02.01 §7.5.1 makes the same point for
+  administration systems).
+* Acceptance is the **Technical Acceptance of Product Compliance
+  (TAPC)**: vendor registration → Acceptance Cycle → self-assessment
+  against the **Verification Check List (VCL)** → **SDPC** (self
+  declaration) → TAPC (TEC testing; Council approval). **Endorsement**
+  is a separate, later commercial agreement with FIDE (C.02.01
+  §7.7–7.8). The TEC 2026 Congress report says the VCLs are not final
+  and new TAPC assessments start under the incoming Commission.
+* §7.3: rules change on a New Rules Date at least four years apart; a
+  TAPC is valid for the Acceptance Cycle.
+
+### 1.2 Requirement map — Dutch (C.04.3) and Team (C.04.6)
+
+| §7 | Requirement | Dutch system | Team system |
+|---|---|---|---|
+| 7.1.1 a | Import FIDE rating lists | ❌ Not in the library (a THP's job) | ❌ Same |
+| 7.1.1 b | Pair with at least one FIDE Swiss system and **all** FIDE acceleration methods | ✅ C.04.3 (`system="dutch"`); ✅ Baku, the only C.04.7 method (`accelerated=True`) | ✅ C.04.6 (`system="team_swiss"`, [`TEAM_SWISS.md`](TEAM_SWISS.md)); ✅ Baku with MP primary (C.04.7 forbids it with GP primary) |
+| 7.1.1 c | Final standings with **every MTB26 tie-break** | ❌ **No tie-breaks are computed** | ❌ **No tie-breaks are computed** |
+| 7.1.2 | Compliance declared per pairing system | Engine, checker and generator are separate per system | Same |
+| 7.1.3 a | English interface; full user manual or online help | ✅ English CLIs and docs; ⚠️ README + docs, no user manual for a THP | Same |
+| 7.1.3 b | Import/export the **latest** FIDE Data Exchange Format (TRF26) and older ones | ⚠️ TRF16 read/write (plus the `XXR`/`XXA`/`XXC`/`XXS` extensions); ❌ **no TRF26 export** for individual events (records 142, 152, 162, 192, 202/212…); ❌ no TRF06 | ✅ TRF26 read/write of the team records (013 read, 142, 152, 162, 192, 240, 250, 260, 300, 310, 320, 330, 352, 362); ⚠️ records 299 (abnormal points) and 801/802 (informative) are not read, 202/212 not written |
+| 7.1.3 c | Free **Pairings and Tie-break Checker** (PTC) and RTG | ⚠️ Pairing half: `caissify-pairings-check`; ❌ tie-break half missing | ⚠️ Pairing half: `caissify-pairings-check --team`; ❌ tie-break half missing |
+| 7.1.3 d | Controlled test environment | ✅ `pip install` in any virtualenv; pure Python | Same |
+| 7.1.4 | Extra (non-FIDE) features must not compromise FIDE pairings | ✅ `casual`/`round_robin`/`arena` are separate engines | ✅ Interpretation switches are off-default and documented |
+| 7.2.1–7.2.2 | TRF as the exchange format (TRF26, TRF16, TRF06) | See 7.1.3 b | See 7.1.3 b |
+| 7.2.3 | PTC: CLI, free, uses the built-in pairing **and tie-break** engine | ⚠️ Pairings only | ⚠️ Pairings only |
+| 7.2.4 | RTG: free CLI, customisable parameters | ✅ `caissify-pairings-rtg` (players, rounds, ratings, draw rate, Baku) | ✅ `caissify-pairings-rtg --team` (teams, rounds, boards, reserves, forfeits, absences, withdrawals, colour type, MP/GP, secondary score, Baku) |
+| 7.3 | Acceptance Cycle, TAPC validity, transition | Not applied for | Not applied for |
+| MTB26 | Every tie-break in the Mandatory Tie-Breaks list (record 202/212 codes) | ❌ None of DE, BPG, BWG, REP, STD, SB, ARO, TPR, PTP, APRO, APPO, RTNG, WIN, WON, PS, TPN, BH, AOB, FB, KS (with C1/C2/M1/M2/P/F/R/Lx) | ❌ None of WIN, WON, PS, TPN, BH, AOB, FB, KS (`:MP`/`:GP`) nor the team-only BC, TBR, BBE, MPvGP, EMMSB, EMGSB, EGMSB, EGGSB, EDE(+BT/BB/T/B), SSSC |
+
+### 1.3 Evidence of pairing conformance
+
+| System | Evidence | Outside reference |
+|---|---|---|
+| Dutch | A.7-style cross-validation: 0 discrepancies on 5000 × 20p/9r and 5000 × 10p/5r, both directions, against bbpPairings ([`FIDE_CONFORMANCE.md`](FIDE_CONFORMANCE.md)) | bbpPairings (endorsed), JaVaFo |
+| Team | Agreement with an independent brute-force implementation of the C.04.6 text on every comparable round of thousands of random tournaments (3–16 teams); the engine's own RTG tournaments always pass its checker ([`TEAM_SWISS.md`](TEAM_SWISS.md) §4) | **None yet.** Cross-validation against an outside reference (for example the TEC's Gacrux) is a separate step that needs the owner's approval |
+
+### 1.4 TODO before any SDPC
+
+1. **Tie-break engine for every MTB26 code**, individual and team
+   (`:MP`/`:GP`, cut/median, `/P`, `/F`, `/R`, `Lx`, `Kx`), with records
+   202/212 read and written. Today the library computes **no**
+   tie-breaks.
+2. **Tie-break checker**: extend both checkers into a PTC that also
+   recomputes the standings of a TRF26 file and reports differences.
+3. **TRF26 for individual tournaments**: write records 142, 152, 162,
+   192, 202/212, 222, 240 (and read them); keep TRF16; add TRF06 import.
+4. **Team TRF26 gaps**: record 299 (abnormal points) and 801/802.
+5. **Team cross-validation** against an outside reference (Gacrux or an
+   endorsed THP), once the owner approves.
+6. **Dutch + Baku** A.7-scale cross-check (see §A.7 below).
+7. A THP to embed the engine (rating-list import, standings, user
+   manual), then the VCL self-assessment when the TEC publishes it.
+
+---
+
+# Historical: C.04.A checklist (in force until 28 February 2026)
 
 ---
 
@@ -91,8 +172,8 @@ not yet parsed or emitted — see the Baku row in §A.7 below.
 | Step | Status |
 |---|---|
 | Implement Baku virtual-points + Dutch integration | ✅ — `DutchEngine(accelerated=True)`; 14 unit tests |
-| Parse / emit the TRF `XXA` per-round acceleration tag | ❌ — not yet; required for the bbp cross-check |
-| Run 5000-tournament A.7 both directions under acceleration | ❌ — blocked on `XXA` support |
+| Parse / emit the TRF `XXA` per-round acceleration tag | ✅ — since 0.5.0 (`trf.py`) |
+| Run 5000-tournament A.7 both directions under acceleration | ❌ — not run yet |
 
 ---
 
