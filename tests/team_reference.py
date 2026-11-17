@@ -65,6 +65,7 @@ class Ref:
             self.ctype = "none"
         self.initial_white = opt.get("initial_color", "white") == "white"
         self.c6_parity = opt.get("c6_mode", "minimise") == "parity"
+        self.c6_by_score = opt.get("c6_following", "score") == "score"
         self.accelerated = opt.get("accelerated", False)
         self.win_mp = opt.get("match_points_win", 2.0)
         self.bye_is_floater = opt.get("bye_is_floater", False)
@@ -215,6 +216,11 @@ class Ref:
         if not lower:
             return []
         next_score = self.score(lower[0])
+        if self.c6_by_score:
+            # C6: the scoregroup with the next lower score of the round; it is
+            # empty when all its teams are upfloaters of brackets already paired.
+            top_score = self.score(top[0])
+            next_score = max((self.score(i) for i in self.active if self.score(i) < top_score), default=None)
         next_group = {i for i in lower if self.score(i) == next_score}
         last_two = self.r >= self.total - 1
         best = None

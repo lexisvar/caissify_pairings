@@ -47,7 +47,7 @@ report.
 | 2.2.1 | C3: a legal pairing must exist for the teams not yet paired | Every upfloater set is checked with `_legal_set`: the bracket **and** the rest must each have a perfect matching. The PAB choice checks the rest too. |
 | 2.3.1 | C4: fewest upfloaters | Size loop in `_upfloaters_by_enumeration` (smallest legal size first); weight `w1` in `_upfloaters_by_matching`. |
 | 2.3.2 | C5: maximise the upfloaters' scores, taken in ascending order | `_compositions` yields per-level counts in C5 order (fewest from the lowest level, then the next…). |
-| 2.3.3 | C6: the following scoregroup's bracket must comply with C1, C3, C4 | `_c6_value` / `_next_bracket_upfloaters` (ambiguity A4). |
+| 2.3.3 | C6: the following scoregroup's bracket must comply with C1, C3, C4 | `_following_group`, `_c6_value` / `_next_bracket_upfloaters` (ambiguity A4). |
 | 2.3.4 | C7: fewest upfloaters that floated in the previous round (not in the last two rounds) | `_c7_value`; `in_last_two_rounds`. |
 | 2.3.5 | C8: fewest teams whose preference is not met | `pair_cost_vector` (a pair costs 1 when both prefer the same colour). |
 | 2.3.6 | C9 (Type B): fewest unmet strong preferences | `pair_cost_vector` (both strong for the same colour). |
@@ -175,10 +175,19 @@ is not a C6 failure, because every candidate set with the same C4/C5
 composition leaves the same parity. Default `c6_mode="minimise"`:
 minimise that number. Option `c6_mode="parity"`: a set complies when the
 number equals the parity (0 or 1) and all non-complying sets are equal.
-The two differ only when no set reaches the parity. If every team of the
-following scoregroup became an upfloater, C6 does not apply ("this
-scoregroup is now empty"); only that scoregroup is looked at, as the
-note says.
+The two differ only when no set reaches the parity. "The following
+scoregroup" is the scoregroup with the next lower score of the round
+(Article 1.3.1: all the teams with the same score; the PAB team
+included). If all its teams "became or are upfloaters" — in the set
+being chosen, or already in a bracket paired before — it "is now
+empty" and C6 does not apply to this bracket at all; only that
+scoregroup is looked at, as the note says. Default
+`c6_following="score"`. Option `c6_following="unpaired"` (the reading
+before 0.8.0) takes instead the highest scoregroup among the teams
+still to be paired, so a scoregroup emptied by an earlier bracket is
+skipped and the next one is checked; that leaves "or are upfloaters"
+nothing to refer to. The cross-validation against Gacrux (section 5,
+D1) found the difference.
 
 **A5. TRF26 record 250 field order.** The field table puts fictitious
 **match** points in columns 5–8 and **game** points in 10–13, but the
@@ -273,12 +282,15 @@ logs a warning, so the arbiter sees exactly which rule had to give.
   every team's state and enumerates every upfloater subset and every
   pairing in identifier order. Compared with the engine on random
   tournaments (3–16 teams, forfeits, absences, withdrawals, all colour
-  types, MP/GP, Baku, both C6 modes). Result at the time of writing,
-  **0 differences**: 42,600 of 42,600 compared rounds over 10,000
-  tournaments of 3–12 teams, 2,717 of 2,717 over 500 tournaments of
-  13–16 teams, and 8,563 of 8,563 with the exact fallback search for
-  upfloaters forced on. Rounds with no legal pairing at all (3.3.3, the
-  arbiter decides) are not compared.
+  types, MP/GP, Baku, both C6 modes, both readings of the C6 following
+  scoregroup). Result after the C6 change of section 5 (D1), **0
+  differences**: 42,600 of 42,600 compared rounds over 10,000
+  tournaments of 3–12 teams, 2,766 of 2,766 over 500 tournaments of
+  13–16 teams, and 8,477 of 8,477 over 2,000 tournaments with the exact
+  fallback search for upfloaters forced on. Rounds with no legal pairing
+  at all (3.3.3, the arbiter decides) are not compared. The reference
+  shares the engine's readings of section 3, so it cannot catch a
+  misreading; section 5 compares against an outside program.
 * **RTG → TRF26 → checker** (`tests/test_team_trf_fpc.py`): the engine's
   own tournaments always pass its checker; TRF26 round-trips are exact.
 * **Performance** (Python 3.13, one core): 200 teams over 11 rounds,
@@ -289,5 +301,4 @@ logs a warning, so the arbiter sees exactly which rule had to give.
   few seconds at 200 teams. `tests/test_team_trf_fpc.py::test_performance_200_teams`
   (slow) measures it.
 
-No third-party pairing program was run. Cross-validation against an
-outside reference (for example Gacrux) is a separate step.
+For the comparison with an outside implementation, see section 5.

@@ -46,6 +46,8 @@ def run_comparison(seeds, min_teams, max_teams, budget=None):
             )
             if rng.random() < 0.15:
                 opts["c6_mode"] = "parity"
+            if rng.random() < 0.15:
+                opts["c6_following"] = "unpaired"
 
             def pairer(teams, prev, rnd, total, **kw):
                 stats["rounds"] += 1

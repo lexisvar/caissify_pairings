@@ -302,6 +302,34 @@ class TestQualityCriteria:
         _, eng = pair(teams, rnd=3)
         assert eng.trace[0]["upfloaters"] == [4] and eng.trace[0]["c6"] == 0
 
+    def test_c6_following_scoregroup_already_upfloated(self):
+        # C6 (2026): "Unless all the teams in the following scoregroup became
+        # or are upfloaters (thus this scoregroup is now empty)". 1 (6 MP) met
+        # 2 (5 MP), so 3 -- the whole 4-MP scoregroup -- floats up to 1. When
+        # 2 is paired, its following scoregroup (4 MP) is already empty, so C6
+        # does not apply and 6 (the first set of 2-MP upfloaters; 4 and 5
+        # met 2) is chosen, although it leaves 4-5 unable to pair alone (7
+        # met 8). Found by the Gacrux cross-validation (doc/TEAM_SWISS.md §5).
+        teams = [team(1, 6, "WBW", [2]), team(2, 5, "BWB", [1, 4, 5]), team(3, 4, "WBW"),
+                 team(4, 3, "WBW", [2]), team(5, 3, "BWB", [None, 2]), team(6, 2, "WBW"),
+                 team(7, 2, "BWB", [8]), team(8, 1, "WBW", [7])]
+        for mode in ("minimise", "parity"):
+            rows, eng = pair(teams, rnd=4, total=4, c6_mode=mode)
+            brackets = [t for t in eng.trace if t["step"] == "bracket"]
+            assert brackets[0]["upfloaters"] == [3]
+            assert brackets[1]["residents"] == [2] and brackets[1]["upfloaters"] == [6]
+            assert brackets[1]["c6"] == 0
+            assert unordered(rows) == [(1, 3), (2, 6), (4, 7), (5, 8)]
+            # The reading before 0.8.0: the next scoregroup still to be paired.
+            rows, eng = pair(teams, rnd=4, total=4, c6_mode=mode, c6_following="unpaired")
+            brackets = [t for t in eng.trace if t["step"] == "bracket"]
+            assert brackets[1]["upfloaters"] == [7]
+            assert unordered(rows) == [(1, 3), (2, 7), (4, 5), (6, 8)]
+
+    def test_c6_following_option_is_validated(self):
+        with pytest.raises(ValueError):
+            TeamSwissSettings(c6_following="next")
+
     def test_c7_avoids_previous_floaters(self):
         teams = [team(1, 4), team(2, 2, floater_last_round=True), team(3, 2), team(4, 2), team(5, 0)]
         teams.append(team(6, 0))

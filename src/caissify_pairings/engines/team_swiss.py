@@ -290,6 +290,12 @@ class TeamSwissSettings:
     forbidden_pairs: Optional[List] = None
     #: C6: "minimise" (default) or "parity". See doc/TEAM_SWISS.md.
     c6_mode: str = "minimise"
+    #: C6: which scoregroup is "the following scoregroup". "score" (default):
+    #: the scoregroup with the next lower score in the round (Article 1.3.1);
+    #: when all its teams became or are upfloaters it is empty and C6 does not
+    #: apply. "unpaired": the highest scoregroup among the teams still to be
+    #: paired (the reading before 0.8.0). See doc/TEAM_SWISS.md, A4.
+    c6_following: str = "score"
     #: Article 1.5 for C7/C10: is the PAB team a floater in the next round?
     bye_is_floater: bool = False
     #: Article 1.5 for C7/C10: does a paired-but-unplayed match make floaters?
@@ -319,6 +325,8 @@ class TeamSwissSettings:
             raise ValueError("initial_color must be 'white' or 'black'")
         if self.c6_mode not in ("minimise", "parity"):
             raise ValueError("c6_mode must be 'minimise' or 'parity'")
+        if self.c6_following not in ("score", "unpaired"):
+            raise ValueError("c6_following must be 'score' or 'unpaired'")
         if self.boards < 1:
             raise ValueError("boards must be at least 1")
         if self.board_colours:
@@ -745,6 +753,8 @@ class TeamSwissEngine(BasePairingEngine):
 
         rows: List[dict] = []
         unpaired = set(ids)
+        # Article 1.3.1: the scoregroups of the round (the PAB team included).
+        self._round_scores = sorted({self.teams[i].score for i in ids}, reverse=True)
         bye_team: Optional[int] = None
         bye_violation = False
         if len(unpaired) % 2:
@@ -869,7 +879,7 @@ class TeamSwissEngine(BasePairingEngine):
         if result is None:
             result = self._upfloaters_by_matching(unpaired, residents, lower)
             method = "matching"
-            next_group = set(self._levels(lower)[0])
+            next_group = self._following_group(residents, self._levels(lower))
             self._last_selection = {
                 "c6": self._c6_value(unpaired, residents, result, next_group),
                 "c7": self._c7_value(result),
@@ -902,6 +912,25 @@ class TeamSwissEngine(BasePairingEngine):
     def _legal_set(self, unpaired: Set[int], residents: Set[int], ups: Sequence[int]) -> bool:
         bracket = residents | set(ups)
         return self._pm(bracket) and self._pm(unpaired - bracket)
+
+    def _following_group(self, residents: Set[int], levels: List[List[int]]) -> Set[int]:
+        """
+        C6: the unpaired teams of "the following scoregroup". With
+        ``c6_following="score"`` that is the scoregroup with the next lower
+        score of the round (Article 1.3.1); if all its teams became or are
+        upfloaters of a bracket already paired, it is empty ("thus this
+        scoregroup is now empty") and C6 does not apply. With
+        ``"unpaired"``, the highest scoregroup among the unpaired teams.
+        """
+        if not levels:
+            return set()
+        if self.settings.c6_following == "unpaired":
+            return set(levels[0])
+        top = self.teams[next(iter(residents))].score
+        below = [s for s in getattr(self, "_round_scores", []) if s < top]
+        if below and self.teams[levels[0][0]].score != below[0]:
+            return set()
+        return set(levels[0])
 
     def _c6_value(self, unpaired: Set[int], residents: Set[int], ups: Sequence[int], next_group: Set[int]) -> int:
         """
@@ -990,7 +1019,7 @@ class TeamSwissEngine(BasePairingEngine):
         """
         levels = self._levels(lower)
         sizes = [len(lv) for lv in levels]
-        next_group = set(levels[0])
+        next_group = self._following_group(residents, levels)
         budget = self.UPFLOATER_ENUMERATION_BUDGET
         evals = 0
         c7_on = self._c7_applies()
@@ -1003,7 +1032,7 @@ class TeamSwissEngine(BasePairingEngine):
                 best_set: Optional[List[int]] = None
                 legal_seen = 0
                 # Lower bounds: the group parity for C6, forced floaters for C7.
-                remaining_next = len(next_group) - comp[0]
+                remaining_next = len(next_group) - comp[0] if next_group else 0
                 if self.settings.c6_mode == "parity" or remaining_next == 0:
                     c6_lb = 0
                 else:
@@ -1041,7 +1070,7 @@ class TeamSwissEngine(BasePairingEngine):
         """
         levels = self._levels(lower)
         level_of = {i: h for h, lv in enumerate(levels) for i in lv}
-        next_group = set(levels[0])
+        next_group = self._following_group(residents, levels)
         n = len(unpaired)
         base = n + 1
         h_count = len(levels)
@@ -1095,7 +1124,7 @@ class TeamSwissEngine(BasePairingEngine):
                 total += weight(a, b, use_c6)
             return total, out
 
-        use_c6 = True
+        use_c6 = bool(next_group)
         best = solve(set(), set(), use_c6)
         assert best is not None  # C3 holds for the unpaired teams
         if self.settings.c6_mode == "parity":
