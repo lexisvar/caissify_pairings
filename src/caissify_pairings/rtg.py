@@ -343,6 +343,10 @@ def _update_player(
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    if "--team" in sys.argv[1:]:
+        from caissify_pairings.team_rtg import main as team_main
+        sys.exit(team_main(sys.argv[1:]))
+
     parser = argparse.ArgumentParser(
         description="Random Tournament Generator (RTG) for FIDE endorsement"
     )

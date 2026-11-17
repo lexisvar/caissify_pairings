@@ -515,10 +515,14 @@ def _fmt_pair(pair: Tuple[int, Optional[int]]) -> str:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    """CLI: ``caissify-pairings-check <trf_file>``"""
+    """CLI: ``caissify-pairings-check <trf_file>`` (``--team`` for C.04.6 team files)"""
     if len(sys.argv) < 2:
-        print("Usage: caissify-pairings-check <trf_file>", file=sys.stderr)
+        print("Usage: caissify-pairings-check [--team] <trf_file>", file=sys.stderr)
         sys.exit(1)
+
+    if "--team" in sys.argv[1:] or _is_team_file(sys.argv[1]):
+        from caissify_pairings.team_fpc import main as team_main
+        sys.exit(team_main(sys.argv[1:]))
 
     trf_path = sys.argv[1]
     try:
@@ -534,6 +538,17 @@ def main() -> None:
     # Exit code: 0 if all rounds match, 1 otherwise
     if report["summary"]["rounds_mismatched"] > 0:
         sys.exit(1)
+
+
+def _is_team_file(path: str) -> bool:
+    """A TRF26 team tournament (record 310, or a team code in record 192)."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            text = f.read()
+    except (OSError, UnicodeDecodeError):
+        return False
+    from caissify_pairings.team_trf import is_team_trf
+    return is_team_trf(text)
 
 
 def _print_report(report: Dict) -> None:
