@@ -45,10 +45,20 @@ engine is untouched and its outputs are identical.
 - **Validation**: an independent brute-force reference pairer
   (`tests/team_reference.py`) agrees with the engine on every comparable
   round of random tournaments: 42,600 of 42,600 rounds (10,000
-  tournaments of 3-12 teams), 2,717 of 2,717 (500 tournaments of 13-16
-  teams), 8,563 of 8,563 with the exact fallback search forced on;
+  tournaments of 3-12 teams), 2,766 of 2,766 (500 tournaments of 13-16
+  teams), 8,477 of 8,477 with the exact fallback search forced on;
   the engine's own RTG tournaments always pass its checker. 200 teams:
   about 0.05 s per round, at most 0.12 s.
+- **Cross-validation against Gacrux** (an outside reference, not FIDE
+  approved; `doc/TEAM_SWISS.md` section 5): on 1,330 random tournaments
+  (3-200 teams, every 192 team code, forfeits, absences, withdrawals) and
+  the TEC's GrandMommysCup03 file. Pairings and byes agree in every
+  comparable round; board-1 colours agree in every round except 91 Baku
+  rounds, where Gacrux reads the first-team (4.2.1) on the standings
+  score (`baku_score_for_colours=False` reproduces it: 7,921 of 7,921).
+  It found one reading to correct: C6's "following scoregroup" is now
+  the scoregroup with the next lower score, which "is now empty" when
+  its teams already floated up (`c6_following`, default `"score"`).
 - `doc/ENDORSEMENT.md` maps C.02.03 §7 (Tournament Handler Programs,
   in force from 1 March 2026; the former C.04.A) for the Dutch and team
   systems and lists what is missing, starting with tie-breaks (none are

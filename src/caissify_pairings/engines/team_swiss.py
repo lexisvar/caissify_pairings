@@ -294,7 +294,7 @@ class TeamSwissSettings:
     #: the scoregroup with the next lower score in the round (Article 1.3.1);
     #: when all its teams became or are upfloaters it is empty and C6 does not
     #: apply. "unpaired": the highest scoregroup among the teams still to be
-    #: paired (the reading before 0.8.0). See doc/TEAM_SWISS.md, A4.
+    #: paired (the engine's first reading). See doc/TEAM_SWISS.md, A4.
     c6_following: str = "score"
     #: Article 1.5 for C7/C10: is the PAB team a floater in the next round?
     bye_is_floater: bool = False

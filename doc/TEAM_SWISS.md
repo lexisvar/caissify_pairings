@@ -182,8 +182,8 @@ included). If all its teams "became or are upfloaters" — in the set
 being chosen, or already in a bracket paired before — it "is now
 empty" and C6 does not apply to this bracket at all; only that
 scoregroup is looked at, as the note says. Default
-`c6_following="score"`. Option `c6_following="unpaired"` (the reading
-before 0.8.0) takes instead the highest scoregroup among the teams
+`c6_following="score"`. Option `c6_following="unpaired"` (the engine's
+first reading) takes instead the highest scoregroup among the teams
 still to be paired, so a scoregroup emptied by an earlier bracket is
 skipped and the next one is checked; that leaves "or are upfloaters"
 nothing to refer to. The cross-validation against Gacrux (section 5,
@@ -302,3 +302,233 @@ logs a warning, so the arbiter sees exactly which rule had to give.
   (slow) measures it.
 
 For the comparison with an outside implementation, see section 5.
+
+---
+
+## 5. Cross-validation against Gacrux
+
+**Gacrux is not FIDE-approved.** The TEC 2026 Congress report calls it
+"an engine, not a Tournament Handler Program, and … not itself 'FIDE
+approved'", a reference that "can help a THP demonstrate compliance";
+"the FIDE regulations remain authoritative". It was used here only as an
+outside reference to compare against. Where the two programs differ, the
+regulation text decided, not Gacrux. No Gacrux code, binary or
+Gacrux-generated data is in this repository: only this write-up and our
+own regression tests, which encode pairings derived from the regulation.
+
+### 5.1 What was run
+
+* **Gacrux**: <https://github.com/OttoMilvang/TieBreakServer> (the
+  project's PyPI package `gacrux` names it as its repository), by Otto
+  Milvang, MIT licence (copyright FIDE; code donated by Otto Milvang).
+  Commit `49b01e67ccb2f94945fa97b97ade66a35584b341` (2026-10-15),
+  `pairingchecker` version 1.11.65.
+* **Isolation**: cloned into a scratch directory outside this repository.
+  Its build files, dependencies and every module's imports were read
+  before running anything. Its only dependency is networkx; it makes no
+  network or subprocess calls, and the checker writes only the output
+  file it is given. It ran in its own virtual environment (Python 3.13,
+  networkx 3.4.2), with `python -I`, as a black box: `pairingchecker -c`
+  on each file, in process.
+* **What it computes**: `pairingchecker -c` re-pairs every round of a
+  TRF file from the file's own history and reports, round by round, its
+  own pairing (pairs with board-1 colours, the PAB, board order) next to
+  its reading of the file's pairing. Team Swiss is selected by record 192
+  (`FIDE_TEAM_*`).
+
+**Option mapping.** Everything goes through the TRF26 file. Each row
+was checked to be read the same way by both programs.
+
+| Rule | Ours | Gacrux |
+|---|---|---|
+| Type A / B / none (1.7) | `colour_preferences` | 192 `TYPEA` / `TYPEB` / no token (or `-m fideteam[-typeb\|-nocolor]`) |
+| Primary score, secondary used for 4.2.2 (1.2) | `primary_score`, `use_secondary_for_colours` | 192 `_MP_GP`, `_GP_MP`, `_MP`, `_GP` |
+| Baku (C.04.7) | `acceleration_records` from record 250 | Record 250, read in the same field order (MP in columns 5–8; our A5 default). Both refuse Baku with GP primary. |
+| PAB points (1.4) | `bye_match_points`, `bye_game_points` | Record 320 |
+| Board colours | `board_colours` | Record 352 |
+| Initial-colour (4.1) | `initial_color` | Record 152; without it, both infer from round 1 via 4.3.1 (A12) |
+| C6 measure (A4) | `c6_mode` | Pass/fail, i.e. `"parity"`. Never made a difference here. |
+| C6 following scoregroup (A4) | `c6_following` | `"score"` (see D1) |
+| Floaters (A2, A3), "matches played" (A7), C1 after a forfeit (C.04.2 3.5), Type B last round (A6), unplayed rounds (A9) | Our defaults | Same behaviour; no divergence was traced to any of these |
+| First-team with Baku (A8) | `baku_score_for_colours` | `False` (see D2) |
+
+**Not compared**: record 260 (forbidden pairs), full- and half-point
+byes (240 F/H) and non-default 162/362 point systems are not produced
+by our generator. GrandMommysCup03 (5.5) exercises 240 F/H and 260.
+
+### 5.2 Method
+
+1. `caissify-pairings` RTG (`simulate_team_tournament`, i.e. this engine
+   pairing every round) generated **1,330 tournaments**:
+   * size: 900 of 3–16 teams, 400 of 17–40, 30 of 100–200;
+   * shape: 3–11 rounds, 1–10 boards;
+   * rules: Type A/B/none; MP or GP primary; secondary score used (80%)
+     or not; Baku in 30% of the MP events (274 tournaments);
+   * records: a custom 352 sequence (25%); non-default PAB points
+     (25%); initial-colour W or B;
+   * irregular events: team forfeits (647 tournaments), double forfeits
+     (360), empty boards (770), out-of-order line-ups or empty boards
+     (1,140 with a 300 record), absences and withdrawals (917).
+2. Each tournament was written as TRF26 by `write_team_trf`. Gacrux
+   re-paired every round of it in check mode.
+3. For each round we compared, in order:
+   * Gacrux's pairs, the team with White on board 1, and the PAB, with
+     the file (our engine's pairing);
+   * the board order, separately;
+   * that Gacrux reads the file's pairing exactly as `team_trf` does.
+     It did in all **8,112 of 8,112** rounds.
+4. Every divergent round was re-paired by our engine with each option
+   switch of section 3, to see which reading reproduces Gacrux. Each
+   remaining case was traced by hand to an article.
+
+**Gacrux's TRF26 reader** (class b, not a pairing difference). Two
+encodings that TRF26 allows are not read by Gacrux 1.11.65. When the
+absent side has no 001 entry for a board:
+
+* an unoccupied board in a played match (300 record with `0000`)
+  crashes it (status 510, an internal `KeyError`);
+* a team forfeit or a double forfeit (330) is rejected (status 401, "has
+  only 0 games, but teamSize is N … Add 300 Out-of-order records").
+
+The TRF26 330 notes allow both "0000" and "a player of the absent team"
+as the opponent of a present player. Gacrux was therefore fed a second
+copy of each file in the other encoding: every unoccupied board becomes
+a forfeit against a named, non-playing player of the absent side.
+`team_trf` was checked to rebuild the identical tournament (matches,
+colours, MP, GP, played or not, byes) from both copies, in every file.
+The comparison is with our engine's output on the original file.
+
+Gacrux also leaves out the last round of a tournament when no game was
+played in it (only forfeits, an absent team and the PAB). This happened
+in 3 final rounds of 3-team events, which are not compared.
+
+### 5.3 Results
+
+Rounds with no legal pairing at all (3.3.3, the arbiter decides), 191
+rounds, are not compared. Gacrux found no legal pairing in every one of
+them either.
+
+Before the fix of D1, with default options: **7,819 of 7,921 rounds
+identical (98.71%)**. There were 11 pairing divergences (D1) and 91
+colour divergences (D2), and no bye divergence. After the fix (commit
+`a42e533`, the corpus regenerated with the same seeds):
+
+| Teams | Tournaments | Rounds compared | Identical, default options | Identical, `baku_score_for_colours=False` |
+|---|---:|---:|---:|---:|
+| 3-8 | 379 | 1440 | 1429 (99.24%) | 1440 (100.00%) |
+| 9-16 | 521 | 3447 | 3413 (99.01%) | 3447 (100.00%) |
+| 17-24 | 131 | 899 | 893 (99.33%) | 899 (100.00%) |
+| 25-40 | 269 | 1893 | 1862 (98.36%) | 1893 (100.00%) |
+| 100-200 | 30 | 242 | 233 (96.28%) | 242 (100.00%) |
+| **All** | 1330 | 7921 | 7830 (98.85%) | **7921 (100.00%)** |
+
+| Rules (192 code) | Tournaments | Rounds compared | Identical, default options | Identical, `baku_score_for_colours=False` |
+|---|---:|---:|---:|---:|
+| `FIDE_TEAM_TYPEA_MP_GP` | 210 | 1230 | 1230 (100.00%) | 1230 (100.00%) |
+| `FIDE_TEAM_TYPEA_MP` | 63 | 369 | 369 (100.00%) | 369 (100.00%) |
+| `FIDE_TEAM_TYPEA_GP_MP` | 115 | 681 | 681 (100.00%) | 681 (100.00%) |
+| `FIDE_TEAM_TYPEA_GP` | 38 | 224 | 224 (100.00%) | 224 (100.00%) |
+| `FIDE_TEAM_TYPEA_MP_GP_BAKU` | 85 | 511 | 492 (96.28%) | 511 (100.00%) |
+| `FIDE_TEAM_TYPEA_MP_BAKU` | 14 | 88 | 67 (76.14%) | 88 (100.00%) |
+| `FIDE_TEAM_TYPEB_MP_GP` | 204 | 1193 | 1193 (100.00%) | 1193 (100.00%) |
+| `FIDE_TEAM_TYPEB_MP` | 47 | 269 | 269 (100.00%) | 269 (100.00%) |
+| `FIDE_TEAM_TYPEB_GP_MP` | 112 | 702 | 702 (100.00%) | 702 (100.00%) |
+| `FIDE_TEAM_TYPEB_GP` | 35 | 217 | 217 (100.00%) | 217 (100.00%) |
+| `FIDE_TEAM_TYPEB_MP_GP_BAKU` | 89 | 524 | 512 (97.71%) | 524 (100.00%) |
+| `FIDE_TEAM_TYPEB_MP_BAKU` | 25 | 144 | 128 (88.89%) | 144 (100.00%) |
+| `FIDE_TEAM_MP_GP` | 106 | 677 | 677 (100.00%) | 677 (100.00%) |
+| `FIDE_TEAM_MP` | 36 | 230 | 230 (100.00%) | 230 (100.00%) |
+| `FIDE_TEAM_GP_MP` | 65 | 370 | 370 (100.00%) | 370 (100.00%) |
+| `FIDE_TEAM_GP` | 25 | 146 | 146 (100.00%) | 146 (100.00%) |
+| `FIDE_TEAM_MP_GP_BAKU` | 50 | 280 | 264 (94.29%) | 280 (100.00%) |
+| `FIDE_TEAM_MP_BAKU` | 11 | 66 | 59 (89.39%) | 66 (100.00%) |
+
+Every non-Baku mode is 100% identical with default options, and every
+remaining difference is D2. That includes the rounds with a custom 352
+sequence (1,908 of 1,924 identical) and with non-default PAB points
+(1,966 of 1,989): with `baku_score_for_colours=False`, both are 100%.
+Board order agrees in 7,717 of the 7,830 identical rounds; the 113
+others are D3. Gacrux took 507 s for the whole corpus, at most 35 s for
+one 200-team event.
+
+### 5.4 Divergence classes
+
+**D1. C6, "the following scoregroup" (Article 2.3.3). Verdict (a): our
+engine, fixed.** 11 rounds (0.14%), all pairing differences. The pattern
+is: a bracket's next lower scoregroup has already moved up entirely as
+upfloaters of an earlier bracket. Gacrux then does not apply C6 and
+takes the first upfloater set in 3.5.4 order. Our engine skipped to the
+next scoregroup still to be paired and rejected that set because that
+scoregroup could not pair internally. The text: "Unless all the teams in
+the following scoregroup became **or are** upfloaters (thus this
+scoregroup is now empty), choose the set …". Scoregroups are fixed by
+score (1.3.1). "Or are upfloaters" can only mean teams already moved up
+by an earlier bracket, and in that case the clause says C6 does not
+apply. Our reading gave that clause nothing to refer to. Fixed in
+`a42e533`: `c6_following="score"` (default) follows the text, and
+`"unpaired"` keeps the old reading (A4). Regression test
+`test_c6_following_scoregroup_already_upfloated`. After the fix, all 11
+rounds and every other round agree. The brute-force reference was
+updated to the same reading and still agrees with the engine everywhere
+(section 4).
+
+**D2. First-team with Baku acceleration (4.2.1, C.04.7 1.5). Verdict
+(c): genuine ambiguity; our option reproduces Gacrux.** 91 rounds, all
+in Baku tournaments (5.6% of their rounds), all colour-only: the same
+pairs, the other team gets White on board 1.
+* Gacrux compares the standings primary score, without virtual points.
+  Its reading: 4.2.1 says "the higher *primary score*", and C.04.7 1.5
+  lists what the pairing score is for — "to define the scoregroups and
+  internally sort them … and to sort the boards" — without colours.
+* We compare the pairing score (A8). Our reading: in an accelerated
+  event the pairing score is the score of every pairing rule, and the
+  colour allocation is step 4 of the pairing process (3.3.2); 1.5's
+  "i.e." describes rather than limits.
+
+The letter of C.04.7 1.5 leans towards Gacrux's reading.
+`baku_score_for_colours=False` reproduces Gacrux in **91 of 91** rounds,
+and with it the whole corpus agrees in 7,921 of 7,921 rounds. The
+default is unchanged here; it is a rules decision worth putting to the
+TEC.
+
+**D3. Board order, tie-break 3.6.3 (C.04.2 Article 3.6). Verdict (b):
+Gacrux deviation.** 113 rounds (1.4% of the identical rounds), order
+only: same pairs, colours and PAB. C.04.2 3.6.3: "the smallest TPN of the
+**higher ranked participant** of the involved pairs". We use the TPN of
+the higher-ranked team of each pair. Gacrux uses the smaller TPN of the
+two teams, which differs when the higher-ranked team has the larger TPN.
+Gacrux's own key reproduces its order in all 7,830 identical rounds,
+and the C.04.2 key reproduces ours. 3.6 is a "recommended" sorting and
+does not change pairings.
+
+**D4. TRF26 reading (5.2). Verdict (b): Gacrux reader limitations.** Not
+pairing differences: an unoccupied board, and a team or double forfeit,
+when the absent side has no 001 entry; and the last round left out when
+no game was played in it.
+
+### 5.5 GrandMommysCup03 (real TRF26 team file)
+
+`GrandMommysCup03_trf.txt` (TEC test file: 50 teams, 14 rounds, 5
+boards). It exercises:
+* `FIDE_TEAM_BAKU` with explicit 250 records;
+* forbidden pairs (260);
+* full- and half-point byes (240 F/H);
+* 300 records with empty boards;
+* initial-colour B.
+
+Gacrux read the file as it is.
+
+* Gacrux and this engine agree on **all 14 rounds**: pairs, board-1
+  colours and PAB. This holds with `baku_score_for_colours` either way,
+  and both read the file's pairings identically.
+* Both disagree with the file in the same 9 rounds:
+  * colours only in rounds 1–3, 6, 7 and 9;
+  * pairs in rounds 8 and 12;
+  * pairs and one colour in round 13.
+* The round-1 colours of the file contradict 4.3.1 under its own 152
+  `B`: odd-TPN first-teams get Black for TPN 1 but White for TPNs 5, 7
+  and 9.
+
+The TEC describes the file as hand-made and probably containing errors.
+These differences are consistent with that, not with a difference
+between the two programs.

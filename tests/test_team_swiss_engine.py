@@ -320,7 +320,7 @@ class TestQualityCriteria:
             assert brackets[1]["residents"] == [2] and brackets[1]["upfloaters"] == [6]
             assert brackets[1]["c6"] == 0
             assert unordered(rows) == [(1, 3), (2, 6), (4, 7), (5, 8)]
-            # The reading before 0.8.0: the next scoregroup still to be paired.
+            # The engine's first reading: the next scoregroup still to be paired.
             rows, eng = pair(teams, rnd=4, total=4, c6_mode=mode, c6_following="unpaired")
             brackets = [t for t in eng.trace if t["step"] == "bracket"]
             assert brackets[1]["upfloaters"] == [7]
