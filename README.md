@@ -1,11 +1,16 @@
 # caissify-pairings
 
-Chess tournament pairing engines for Python. Ships three engines:
+Chess tournament pairing engines for Python. Ships four engines:
 
 - **`dutch`** — the **FIDE Dutch System (C.04.3)**, cross-validated
   against `bbpPairings` on small and mid-size fields (see the known
   limitations below for larger ones). Optional **Baku Acceleration**
   (FIDE C.04.7, 2026) via `accelerated=True` for large opens.
+- **`team_swiss`** — the **FIDE Swiss Team Pairing System (C.04.6,
+  2026)** for team events: match or game points, Type A / Type B / no
+  colour preferences, board colours, Baku Acceleration, TRF26 team
+  files, a checker and a generator. See
+  [`doc/TEAM_SWISS.md`](doc/TEAM_SWISS.md).
 - **`round_robin`** — **FIDE Berger Tables** (FIDE Handbook §C.05).
   Every player meets every other player; supports single and double
   round-robin. Verified to match the published FIDE tables exactly.
@@ -15,6 +20,7 @@ Chess tournament pairing engines for Python. Ships three engines:
 | Engine        | Use case                                    | FIDE compliance | Complexity |
 |---------------|---------------------------------------------|-----------------|------------|
 | `dutch`       | Rated Swiss / official tournaments          | 0 discrepancies against bbpPairings up to 20 players / 9 rounds; Baku (C.04.7) available | High (full C.04.3) |
+| `team_swiss`  | Team Swiss (Olympiad-style, leagues)        | C.04.6 (2026) article by article; agrees with a brute-force reference on every comparable round tested; not yet checked against an outside program | High |
 | `round_robin` | Round-robin / Scheveningen / club leagues   | Berger Tables verified vs FIDE Handbook §C.05 | Low |
 | `casual`      | Club nights, ladders, non-rated Swiss       | (not the goal) | Low |
 
@@ -22,10 +28,11 @@ Chess tournament pairing engines for Python. Ships three engines:
 
 - A programmable pairing engine — use it as a library, call it from a web
   service, or wrap it in a tournament-director UI.
-- TRF16 parser and writer.
-- A Free Pairings Checker (FPC) — validate a TRF file against the engine.
+- TRF16 parser and writer; TRF26 team records (read and write).
+- A Free Pairings Checker (FPC) — validate a TRF file against the engine
+  (individual or team).
 - A Random Tournament Generator (RTG) — generate simulated tournaments for
-  testing.
+  testing (individual or team).
 - A simple JSON-over-stdin CLI.
 
 ## FIDE A.7 conformance
@@ -164,6 +171,12 @@ caissify-pairings-check tournament.trf
 
 # Generate random tournaments for testing
 caissify-pairings-rtg --players 20 --rounds 9 -n 100 -o ./output/
+
+# Team Swiss (C.04.6): pair the next round of a TRF26 team file
+caissify-pairings --team tournament.trf
+# ... check a TRF26 team tournament, and generate team tournaments
+caissify-pairings-check --team tournament.trf
+caissify-pairings-rtg --team --teams 40 --rounds 9 --colours B -n 100 -o ./teams/
 ```
 
 ### Input JSON schema
@@ -200,6 +213,7 @@ you pass engine-specific options from the CLI:
 |---|---|
 | `dutch` | `bye_value`, `max_byes_per_player`, `initial_color`, `accelerated` (Baku, C.04.5.1) |
 | `round_robin` | `cycles` (1 = single, 2 = double), `bye_type` |
+| `team_swiss` | `primary_score`, `colour_preferences`, `use_secondary_for_colours`, `initial_color`, `boards`, `board_colours`, `bye_match_points`, `bye_game_points`, `accelerated`, `forbidden_pairs`, `absent_teams`, `withdrawn_teams` (see below) |
 | `casual` | `bye_value`, `max_byes_per_player`, `bye_type` |
 
 ### Output JSON schema
@@ -247,12 +261,75 @@ quicktype -s schema engine_output.schema.json -o engine_output.rs --lang rust
   against `bbpPairings` on 20p/9r and 10p/5r benchmarks (see above).
 - **FIDE Berger round-robin** — opt-in via `system="round_robin"`,
   matches the published FIDE Berger tables exactly.
+- **FIDE Swiss Team Pairing System (C.04.6, 2026)** — opt-in via
+  `system="team_swiss"`, with TRF26 team files, a team checker and a
+  team generator.
 - **Casual Swiss engine** — opt-in via `system="casual"` for club-level
   events where FIDE conformance is not required.
 - Full TRF16 round-trip parsing/writing.
 - Free Pairings Checker (FPC) for validating existing TRF files.
 - Random Tournament Generator (RTG) for test corpora.
 - Pure-Python, single runtime dependency (`networkx`).
+
+## Team Swiss (C.04.6) — quick start
+
+The FIDE Swiss Team Pairing System pairs **teams**: scoregroups of match
+points (or game points), at most one pairing-allocated bye (a draw's
+points by default), only upfloaters, and the lighter team colour rules
+(Type A by default). The engine follows the 2026 text article by
+article; every interpretation choice is listed in
+[`doc/TEAM_SWISS.md`](doc/TEAM_SWISS.md).
+
+```python
+from caissify_pairings import generate_pairings
+
+teams = [
+    {"id": 1, "name": "Arda",  "history": [
+        {"round": 1, "opponent": 4, "color": "white", "type": "played", "mp": 2, "gp": 3.0}]},
+    {"id": 2, "name": "Belor", "history": [
+        {"round": 1, "opponent": 5, "color": "black", "type": "played", "mp": 1, "gp": 2.0}]},
+    # ... one dict per team; "color" is the team's colour on board 1
+]
+
+rows = generate_pairings(
+    system="team_swiss",
+    players=teams,               # the teams
+    previous_pairings=set(),     # optional: (id, id) of matches played
+    round_number=2,
+    total_rounds=9,
+    colour_preferences="A",      # "A" (default), "B" or "none"
+    primary_score="mp",          # or "gp"
+    boards=4,                    # or board_colours="WBWB" (TRF26 record 352)
+)
+# [{"white_id": 1, "black_id": 2, "table": 1, "white_tpn": 1, "black_tpn": 2,
+#   "boards": [{"board": 1, "white_id": 1, "black_id": 2}, ...]},
+#  {"white_id": 7, "black_id": None, "bye": True, "bye_type": "U",
+#   "match_points": 1.0, "game_points": 2.0, ...}]
+```
+
+Each team carries its **history** (one entry per earlier round):
+`type` is `played`, `forfeit_win`, `forfeit_loss`, `double_forfeit`,
+`pab`, `fpb`, `hpb`, `zpb` (absent) or `adjourned`; `opponent`, `color`
+(board 1, as scheduled), `mp` and `gp`. Scores, colour differences,
+preferences, floaters and bye eligibility are all worked out from it.
+Pass withdrawn and absent teams too, with `"withdrawn": True` /
+`"absent": True`. `tpn` (else `starting_number`, else `id`) is the
+tournament pairing number set by the competition rules.
+
+What you can rely on:
+
+- Exact search: the first set of upfloaters and the first pairing in the
+  regulation's lexicographic order among the optimal ones (C4–C10).
+- `engine.trace` (or `caissify-pairings --team --explain`) shows every
+  decision: bye, residents, upfloaters, the criteria values.
+- About 0.05 s per round for 200 teams (at most 0.25 s in our runs).
+- No tie-breaks are computed (see [`doc/ENDORSEMENT.md`](doc/ENDORSEMENT.md)).
+
+TRF26 team files: `caissify_pairings.team_trf` reads and writes the team
+records (310, 320, 330, 300, 240, 250, 260, 352, 362, 192, legacy 013);
+`caissify_pairings.team_fpc.check_team_trf(text)` re-pairs every round;
+`caissify_pairings.team_rtg.generate_team_tournament(...)` simulates
+tournaments board by board.
 
 ## Baku Acceleration — quick start
 
@@ -417,8 +494,15 @@ All functions are deterministic and never mutate their inputs.
 Being honest up front — these are known limitations you will hit if your
 use-case is beyond them:
 
-- **Swiss systems other than Dutch are not implemented yet.** No Dubov,
-  Burstein, or Monrad generators — those are on the roadmap.
+- **Swiss systems other than Dutch and the team system are not
+  implemented yet.** No Dubov, Burstein, Lim or Double Swiss — those
+  are on the roadmap.
+- **No tie-breaks.** The library computes no tie-breaks (MTB26), so the
+  checkers check pairings only.
+- **The team engine has not been checked against another program.** It
+  agrees with an independent brute-force implementation of the text on
+  every comparable round tested; a comparison with an outside reference
+  (for example Gacrux) has not been run.
 - **Large-tournament fixture match rates are lower** against pre-recorded
   `bbpPairings` outputs for 40+ players (e.g. 40p/9r reports ~11% exact
   pair agreement on a handful of fixtures). The 5000-tournament A.7

@@ -619,3 +619,14 @@ class TestParticipation:
         rows, _ = pair(teams, rnd=3)
         assert [sorted((r["white_id"], r["black_id"])) for r in rows] == [[2, 4], [1, 3]]
         assert [r["table"] for r in rows] == [1, 2]
+
+
+def test_output_rows_follow_the_engine_output_schema():
+    jsonschema = pytest.importorskip("jsonschema")
+    from caissify_pairings.schemas import engine_output_schema
+
+    teams = [team(1, 1, "p"), team(2, 2, "W", [3]), team(3, 0, "B", [2]), team(4, 2), team(5, 0)]
+    rows, _ = pair(teams)
+    jsonschema.validate(rows, engine_output_schema())
+    rows, _ = pair([team(1, 2, "W", [2]), team(2, 0, "B", [1])])      # flagged C1 row
+    jsonschema.validate(rows, engine_output_schema())

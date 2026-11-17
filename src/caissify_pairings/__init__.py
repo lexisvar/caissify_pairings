@@ -9,6 +9,9 @@ Engines:
     "dutch"        — FIDE Dutch System (C.04.3, Feb 2026).
                      Optional ``accelerated=True`` enables Baku
                      Acceleration (FIDE C.04.5.1) for rounds 1-2.
+    "team_swiss"   — FIDE Swiss Team Pairing System (C.04.6, 2026).
+                     ``players`` is the list of teams; see
+                     doc/TEAM_SWISS.md.
     "round_robin"  — FIDE Berger Tables (FIDE Handbook §C.05).
                      Optional ``cycles=2`` for double round-robin.
     "casual"       — Simple Swiss for non-rated tournaments.

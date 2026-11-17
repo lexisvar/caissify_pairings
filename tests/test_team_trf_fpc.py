@@ -384,3 +384,30 @@ class TestCLI:
         text = files[0].read_text()
         assert "192 FIDE_TEAM_TYPEB_MP_GP" in text
         assert check_team_trf(text)["summary"]["rounds_mismatched"] == 0
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("colours, baku", [("A", False), ("B", False), ("B", True)])
+def test_performance_200_teams(colours, baku):
+    """About 0.05 s per round on a laptop; the bound leaves room for slow CI machines."""
+    import time
+
+    from caissify_pairings.engines.team_swiss import TeamSwissEngine
+
+    times = []
+
+    def pairer(teams, prev, rnd, total, **kw):
+        start = time.perf_counter()
+        rows = TeamSwissEngine(players=teams, previous_pairings=prev, round_number=rnd, total_rounds=total,
+                               **kw).generate_pairings()
+        times.append(time.perf_counter() - start)
+        return rows
+
+    logging.disable(logging.WARNING)
+    try:
+        simulate_team_tournament(num_teams=200, num_rounds=11, seed=11, pairer=pairer,
+                                 colour_preferences=colours, accelerated=baku)
+    finally:
+        logging.disable(logging.NOTSET)
+    print(f"200 teams, Type {colours}, Baku {baku}: max {max(times):.3f} s, mean {sum(times) / len(times):.3f} s")
+    assert max(times) < 2.0

@@ -273,15 +273,21 @@ logs a warning, so the arbiter sees exactly which rule had to give.
   every team's state and enumerates every upfloater subset and every
   pairing in identifier order. Compared with the engine on random
   tournaments (3–16 teams, forfeits, absences, withdrawals, all colour
-  types, MP/GP, Baku, both C6 modes). Result at the time of writing:
-  **0 differences** on 10,000+ rounds (see the CHANGELOG entry for the
-  exact count); the exact fallback path for upfloaters, forced on, also
-  agrees.
+  types, MP/GP, Baku, both C6 modes). Result at the time of writing,
+  **0 differences**: 42,600 of 42,600 compared rounds over 10,000
+  tournaments of 3–12 teams, 2,717 of 2,717 over 500 tournaments of
+  13–16 teams, and 8,563 of 8,563 with the exact fallback search for
+  upfloaters forced on. Rounds with no legal pairing at all (3.3.3, the
+  arbiter decides) are not compared.
 * **RTG → TRF26 → checker** (`tests/test_team_trf_fpc.py`): the engine's
   own tournaments always pass its checker; TRF26 round-trips are exact.
-* **Performance**: about 0.05 s per round on average and at most 0.25 s
-  for 200 teams over 11 rounds (Types A and B, with and without Baku);
-  400 teams: at most 0.4 s per round (Python 3.13, one core).
+* **Performance** (Python 3.13, one core): 200 teams over 11 rounds,
+  Types A and B, with and without Baku: about 0.05 s per round on
+  average, at most 0.12–0.25 s depending on the run; 400 teams: at most
+  0.4 s per round. The exact fallback for upfloaters, when the literal
+  enumeration exceeds 600 sets (not seen in these runs), costs up to a
+  few seconds at 200 teams. `tests/test_team_trf_fpc.py::test_performance_200_teams`
+  (slow) measures it.
 
 No third-party pairing program was run. Cross-validation against an
 outside reference (for example Gacrux) is a separate step.

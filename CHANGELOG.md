@@ -9,6 +9,51 @@ at `1.0.0`.
 
 ## [Unreleased]
 
+Target: 0.8.0. Nothing changes for the existing engines: the Dutch
+engine is untouched and its outputs are identical.
+
+### Added
+- **FIDE Swiss Team Pairing System (C.04.6, 2026)** as
+  `system="team_swiss"` (`caissify_pairings.engines.team_swiss`):
+  - pairing-allocated bye by Article 3.4 (a draw's points by default);
+  - upfloaters by Article 3.5 (C4 > C5 > C6 > C7, then the 3.5.3/3.5.4
+    order) and brackets by Article 3.6 (C1, C8 > C9 > C10, then the
+    pairing identifier), with an exact search;
+  - colours by the first-team rules 4.3.1-4.3.9 with C.04.2 3.4
+    (unplayed rounds), then per-board colours (`boards`,
+    `board_colours`, default odd boards to the team with White on
+    board 1);
+  - Type A / Type B / no colour preferences, match or game points as
+    primary score, the secondary score for colours or not, Baku
+    Acceleration (C.04.7, match points only), forbidden pairings,
+    absent and withdrawn teams;
+  - `engine.trace` explains every decision; rounds with no legal
+    pairing are completed and flagged (`violations`: C1/C2).
+  Every interpretation choice is listed, with its option where one
+  exists, in `doc/TEAM_SWISS.md`.
+- **TRF26 team files** (`caissify_pairings.team_trf`): read and write
+  records 142, 152, 162, 192, 240, 250, 260, 300, 310, 320, 330, 352,
+  362, and read the legacy 013; team matches are rebuilt from the
+  player records. TRF16 support is unchanged (`trf.format_player_line`
+  is new and public).
+- **Team modes for the tools**: `caissify-pairings --team FILE.trf
+  [--round N]` (or JSON on stdin; a JSON state with `"system":
+  "team_swiss"` may list `"teams"`), `caissify-pairings-check --team`
+  (TRF26 team files are also detected), `caissify-pairings-rtg --team`
+  (forfeits, empty boards, line-ups out of order, absences,
+  withdrawals, Type A/B/none, MP/GP, Baku).
+- **Validation**: an independent brute-force reference pairer
+  (`tests/team_reference.py`) agrees with the engine on every comparable
+  round of random tournaments: 42,600 of 42,600 rounds (10,000
+  tournaments of 3-12 teams), 2,717 of 2,717 (500 tournaments of 13-16
+  teams), 8,563 of 8,563 with the exact fallback search forced on;
+  the engine's own RTG tournaments always pass its checker. 200 teams:
+  about 0.05 s per round, at most 0.12 s.
+- `doc/ENDORSEMENT.md` maps C.02.03 §7 (Tournament Handler Programs,
+  in force from 1 March 2026; the former C.04.A) for the Dutch and team
+  systems and lists what is missing, starting with tie-breaks (none are
+  computed yet).
+
 ## [0.7.1] — 2026-11-12
 
 ### Fixed
