@@ -511,3 +511,8 @@ def parse_trf(trf_content: str) -> Dict:
 def write_trf(tournament: Dict, players: List[Dict], num_rounds: int) -> str:
     """Write tournament state to a TRF16 string."""
     return TRFWriter(tournament, players, num_rounds).write()
+
+
+def format_player_line(player: Dict, num_rounds: int) -> str:
+    """One TRF 001 record (the player section is the same in TRF16 and TRF26)."""
+    return TRFWriter({}, [player], num_rounds)._format_player(player)

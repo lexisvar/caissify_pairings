@@ -6,6 +6,10 @@ Modes:
     caissify-pairings --check FILE.trf — FPC: check a TRF file against engine
     caissify-pairings-check FILE.trf   — FPC shortcut
     caissify-pairings-rtg [options]    — RTG: generate random tournaments
+    caissify-pairings --team FILE.trf [--round N]
+                                       — pair a round of a TRF26 team tournament
+    caissify-pairings --team < state.json
+                                       — pair a team round from JSON ("teams": [...])
 
 Input JSON shape (stdin mode)::
 
@@ -43,6 +47,7 @@ _RESERVED_KEYS = frozenset(
         "previous_pairings",
         "round_number",
         "total_rounds",
+        "teams",
     }
 )
 
@@ -51,6 +56,10 @@ def main() -> None:
     if len(sys.argv) >= 2 and sys.argv[1] in ("--version", "-V"):
         print(f"caissify-pairings {__version__}")
         return
+
+    if len(sys.argv) >= 2 and sys.argv[1] == "--team":
+        from caissify_pairings.team_cli import main as team_main
+        sys.exit(team_main(sys.argv[2:]))
 
     if len(sys.argv) >= 2 and sys.argv[1] == "--check":
         from caissify_pairings.fpc import main as fpc_main
@@ -71,6 +80,8 @@ def main() -> None:
 
     system = data.get("system", "dutch")
     players = data.get("players", [])
+    if system == "team_swiss" and not players and "teams" in data:
+        players = data["teams"]
     round_number = data.get("round_number", 1)
     total_rounds = data.get("total_rounds", 9)
 
